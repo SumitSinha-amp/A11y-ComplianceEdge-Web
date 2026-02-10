@@ -1,6 +1,6 @@
 A11y ComplianceEdge - A web Accessibility Compliance accelerator tool
 
-# Run and deploy your AI Studio app
+# Run and deploy your  app
 
 This contains everything you need to run your app locally.
 
