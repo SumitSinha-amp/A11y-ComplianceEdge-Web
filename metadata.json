@@ -1,0 +1,5 @@
+{
+  "name": "AEM Accessibility Accelerator",
+  "description": "An intuitive dashboard for AEM content creators to scan pages for accessibility issues using both Axe Core and Siteimprove Alfa, featuring AI-powered remediation suggestions.",
+  "requestFramePermissions": []
+}
