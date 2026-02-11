@@ -1,6 +1,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { AccessibilityIssue } from "../types";
+
 export interface FixResult {
   fixedHtml: string;
   appliedFixes: {
@@ -14,7 +15,7 @@ export interface FixResult {
 
 export class GeminiService {
   static async getRemediation(issue: AccessibilityIssue): Promise<string> {
-    const apiKey = process.env.API_KEY;
+    const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) return "Gemini API key is required.";
 
     const ai = new GoogleGenAI({ apiKey });
@@ -53,7 +54,6 @@ export class GeminiService {
 
     const ai = new GoogleGenAI({ apiKey });
     
-    // We use a specific system instruction to ensure the model focuses on valid JSON escaping
     const systemInstruction = `You are a specialized Accessibility Remediation Engine.
     Instead of returning the whole HTML, you must identify specific elements that need fixing and return an array of patches.
     For each patch, provide a CSS selector that uniquely identifies the element in the provided HTML and the new, corrected HTML snippet for that element.`;
@@ -74,7 +74,7 @@ export class GeminiService {
     `;
 
     try {
-       const response = await ai.models.generateContent({
+      const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
