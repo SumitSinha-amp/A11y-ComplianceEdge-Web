@@ -1,7 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { AccessibilityIssue } from "../types";
-
 export interface FixResult {
   fixedHtml: string;
   appliedFixes: {
@@ -9,12 +8,13 @@ export interface FixResult {
     description: string;
     snippetBefore: string;
     snippetAfter: string;
+    selector?: string;
   }[];
 }
 
 export class GeminiService {
   static async getRemediation(issue: AccessibilityIssue): Promise<string> {
-    const apiKey = import.meta.env.VITE_API_KEY;
+    const apiKey = process.env.API_KEY;
     if (!apiKey) return "Gemini API key is required.";
 
     const ai = new GoogleGenAI({ apiKey });
@@ -43,85 +43,136 @@ export class GeminiService {
     }
   }
 
-  static async fixHtml(html: string): Promise<FixResult> {
+  /**
+   * Fixes HTML using a "Patching Strategy" to avoid JSON truncation errors.
+   * Instead of the full HTML, we ask for specific selectors and their fixes.
+   */
+  static async fixHtml(originalHtml: string): Promise<FixResult> {
     const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) throw new Error("API Key missing");
 
     const ai = new GoogleGenAI({ apiKey });
     
     // We use a specific system instruction to ensure the model focuses on valid JSON escaping
-    const systemInstruction = `You are a specialized Accessibility Remediation Engine. 
-    Your task is to take HTML and return a JSON object containing the fixed version.
-    CRITICAL: The "fixedHtml" field must contain the entire provided HTML with your improvements applied.
-    Ensure all special characters within the HTML strings are correctly escaped for JSON compatibility.
-    Do not truncate the HTML.`;
+    const systemInstruction = `You are a specialized Accessibility Remediation Engine.
+    Instead of returning the whole HTML, you must identify specific elements that need fixing and return an array of patches.
+    For each patch, provide a CSS selector that uniquely identifies the element in the provided HTML and the new, corrected HTML snippet for that element.`;
 
     const prompt = `
-      Analyze the provided HTML and apply common, high-confidence accessibility fixes for:
-      1. Missing alt text for images.
-      2. Missing form labels (use aria-label or associated labels).
-      3. Incorrect heading sequences (skip levels).
-      4. Missing lang attributes on <html> or containers.
-      5. Basic ARIA improvements (roles, states).
+      Analyze the provided HTML for accessibility violations (WCAG 2.1 AA).
+      Return a JSON object with an array of "appliedFixes".
       
+      Each fix object must contain:
+      1. "selector": A unique CSS selector to find the element (e.g., "img[src*='hero']", "button.submit", "h2:nth-of-type(2)").
+      2. "category": "Design", "Content", or "Development".
+      3. "description": What was fixed.
+      4. "snippetBefore": The original HTML of the element.
+      5. "snippetAfter": The corrected HTML of the element.
+
       Input HTML:
-      ${html}
+      ${originalHtml}
     `;
 
     try {
-      const response = await ai.models.generateContent({
+       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
           systemInstruction,
           responseMimeType: "application/json",
-          // Increase token limits for large HTML files
           maxOutputTokens: 8192,
           thinkingConfig: { thinkingBudget: 1024 },
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              fixedHtml: { 
-                type: Type.STRING,
-                description: "The complete modified HTML string with all fixes applied."
-              },
               appliedFixes: {
                 type: Type.ARRAY,
                 items: {
                   type: Type.OBJECT,
                   properties: {
+                    selector: { type: Type.STRING },
                     category: { type: Type.STRING },
                     description: { type: Type.STRING },
                     snippetBefore: { type: Type.STRING },
                     snippetAfter: { type: Type.STRING }
                   },
-                  required: ["category", "description", "snippetBefore", "snippetAfter"]
+                  required: ["selector", "category", "description", "snippetBefore", "snippetAfter"]
                 }
               }
             },
-            required: ["fixedHtml", "appliedFixes"]
+            required: ["appliedFixes"]
           }
         }
       });
       
       let text = response.text?.trim() || "";
       
-      // Sanitization: Remove potential markdown wrappers if the model included them
-      if (text.startsWith("```json")) {
-        text = text.replace(/^```json/, "").replace(/```$/, "").trim();
-      } else if (text.startsWith("```")) {
-        text = text.replace(/^```/, "").replace(/```$/, "").trim();
-      }
+      // Cleanup common model formatting artifacts
+      text = text.replace(/^```json/, "").replace(/```$/, "").trim();
 
       try {
-        return JSON.parse(text) as FixResult;
+        const rawResult = JSON.parse(text);
+        const patches = rawResult.appliedFixes || [];
+        
+        // Apply patches to the original HTML locally
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(originalHtml, 'text/html');
+        
+        patches.forEach((patch: any) => {
+          try {
+            const element = doc.querySelector(patch.selector);
+            if (element) {
+              const tempDiv = document.createElement('div');
+              tempDiv.innerHTML = patch.snippetAfter.trim();
+              const newNode = tempDiv.firstElementChild;
+              if (newNode) {
+                element.replaceWith(newNode);
+              }
+            }
+          } catch (selectorError) {
+            console.warn(`Could not apply patch for selector: ${patch.selector}`, selectorError);
+          }
+        });
+
+        return {
+          fixedHtml: doc.documentElement.outerHTML,
+          appliedFixes: patches
+        };
       } catch (parseError) {
-        console.error("JSON Parse failed on text:", text.substring(0, 100) + "...");
-        throw new Error("The AI response was malformed. This usually happens with very large HTML files exceeding output limits.");
+        console.error("Failed to parse AI patches:", text);
+        // Fallback: try to find any valid JSON structure if the model added text around it
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            const fixedJson = JSON.parse(jsonMatch[0]);
+            // Recurse once with fixed JSON if found
+            return this.applyPatches(originalHtml, fixedJson.appliedFixes || []);
+          } catch (innerError) {
+            throw new Error("AI response was malformed and couldn't be recovered.");
+          }
+        }
+        throw new Error("The AI remediation response was invalid.");
       }
     } catch (e) {
       console.error("Gemini Fix Error:", e);
       throw e;
     }
+  }
+
+  private static applyPatches(originalHtml: string, patches: any[]): FixResult {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(originalHtml, 'text/html');
+    patches.forEach((patch: any) => {
+      try {
+        const element = doc.querySelector(patch.selector);
+        if (element) {
+          element.outerHTML = patch.snippetAfter;
+        }
+      } catch (e) {}
+    });
+    return {
+      fixedHtml: doc.documentElement.outerHTML,
+      appliedFixes: patches
+    };
   }
 }
