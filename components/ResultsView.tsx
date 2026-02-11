@@ -46,7 +46,11 @@ const ResultsView: React.FC<ResultsViewProps> = ({ scans }) => {
     if (!activeScan?.htmlSnapshot) return;
     setIsFixing(true);
     try {
-      const result = await GeminiService.fixHtml(activeScan.htmlSnapshot);
+      const snippets = activeScan.issues
+    .flatMap(issue => issue.nodes.map(n => n.html))
+    .slice(0, 10); // safety limit
+      //const result = await GeminiService.fixHtml(activeScan.htmlSnapshot);
+      const result = await GeminiService.fixHtml(snippets.join("\n\n"));
       setFixResult(result);
     } catch (e) {
       alert("AI Remediation failed. Please try again.");
