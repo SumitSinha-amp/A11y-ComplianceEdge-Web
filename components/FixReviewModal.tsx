@@ -20,7 +20,7 @@ const FixReviewModal: React.FC<FixReviewModalProps> = ({ result, filename, onClo
   };
 
   return (
-    <div className="fixed inset-0 z-[250] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 md:p-10">
+    <div className="fixed inset-0 z-[250] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 md:p-10 !mt-0">
       <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-full max-h-[850px] rounded-[40px] shadow-2xl flex flex-col overflow-hidden border dark:border-slate-800 animate-in zoom-in duration-300">
         <div className="px-10 py-8 border-b dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900">
           <div>
