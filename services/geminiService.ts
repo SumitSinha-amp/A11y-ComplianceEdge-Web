@@ -14,7 +14,7 @@ export interface FixResult {
 
 export class GeminiService {
   static async getRemediation(issue: AccessibilityIssue): Promise<string> {
-    const apiKey = process.env.API_KEY;
+    const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) return "Gemini API key is required.";
 
     const ai = new GoogleGenAI({ apiKey });
@@ -44,7 +44,7 @@ export class GeminiService {
   }
 
   static async fixHtml(html: string): Promise<FixResult> {
-    const apiKey = process.env.API_KEY;
+    const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) throw new Error("API Key missing");
 
     const ai = new GoogleGenAI({ apiKey });
