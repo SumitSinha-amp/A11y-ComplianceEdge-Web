@@ -1,5 +1,8 @@
 A11y ComplianceEdge - A web Accessibility Compliance accelerator tool
 
+The app scans and analyzes HTML source code for acceessibility issues and WCAG compliance.
+Provides AI guidance and remediation.
+
 # Run and deploy your  app
 
 This contains everything you need to run your app locally.
