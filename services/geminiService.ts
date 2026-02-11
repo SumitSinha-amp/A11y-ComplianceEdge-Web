@@ -158,7 +158,6 @@ export class GeminiService {
       throw e;
     }
   }
-
   private static applyPatches(originalHtml: string, patches: any[]): FixResult {
     const parser = new DOMParser();
     const doc = parser.parseFromString(originalHtml, 'text/html');
