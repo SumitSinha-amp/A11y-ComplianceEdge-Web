@@ -13,7 +13,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read #This is required for actions/checkout
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -24,19 +24,17 @@ jobs:
           node-version: '24.x'
 
       - name: Install and Build
-      run: |
-        npm ci
-        npm run build
-
+        run: |
+          npm ci
+          npm run build
 
       - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: node-app
-        path: |
-          .
-          !node_modules
-
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-app
+          path: |
+            .
+            !node_modules
 
   deploy:
     runs-on: ubuntu-latest
