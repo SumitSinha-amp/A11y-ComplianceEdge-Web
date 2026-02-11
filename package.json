@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "npx serve -s . -l 8080"
+    "start": "node ./node_modules/serve/build/main.js -s dist -l $PORT"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.19",
