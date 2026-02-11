@@ -23,17 +23,19 @@ jobs:
         with:
           node-version: '24.x'
 
-      - name: npm install, build, and test
+      - name: Install and Build
         run: |
-            rm -rf node_modules package-lock.json
-            npm install
-            npm run build
+          npm ci
+          npm run build
 
-      - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v4
-        with:
-          name: node-app
-          path: .
+      - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: node-app
+        path: |
+          .
+          !node_modules
+
 
   deploy:
     runs-on: ubuntu-latest
