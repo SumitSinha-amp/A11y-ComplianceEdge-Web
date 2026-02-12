@@ -53,6 +53,7 @@ const FileScanner: React.FC<FileScannerProps> = ({ onComplete }) => {
         if (urlList.length === 0) throw new Error("At least one URL is required for remote auditing.");
         
         for (let i = 0; i < urlList.length; i++) {
+          if (signal.aborted) break;
           const url = urlList[i];
           setCurrentFile(url);
           addLog(`Scanning target: ${url}`);
@@ -62,6 +63,10 @@ const FileScanner: React.FC<FileScannerProps> = ({ onComplete }) => {
             // Throttle slightly for bulk requests to avoid proxy rate-limiting
             if (urlList.length > 1) await new Promise(r => setTimeout(r, 300));
           } catch (err) {
+            if ((err as Error).name === 'AbortError' || signal.aborted) {
+               addLog("Scan Aborted.");
+               break;
+            }
             setErrors(prev => [...prev, { item: url, message: (err as Error).message }]);
             addLog(`FAILURE: ${url}`);
           }
@@ -83,23 +88,23 @@ const FileScanner: React.FC<FileScannerProps> = ({ onComplete }) => {
             const result = await ScannerService.scanRawHtml(html, f.name, `file://${f.name}`, batchId, files.length > 1 ? ScanMode.MULTIPLE : ScanMode.SINGLE, (m) => addLog(m));
             allResults.push(result);
           } catch (err) {
+            if ((err as Error).name === 'AbortError' || signal.aborted) break;
             setErrors(prev => [...prev, { item: f.name, message: "File could not be parsed as text." }]);
           }
           setProgress(Math.round(((i + 1) / files.length) * 100));
         }
       }
-      if (allResults.length > 0) {
+       if (!signal.aborted && allResults.length > 0) {
         onComplete(allResults);
-      } else if (errors.length > 0) {
-        // Stop scanning state but keep errors visible
-        setIsScanning(false);
       }
     } catch (err) {
-      setErrors([{ item: "General Engine Failure", message: (err as Error).message }]);
-      setIsScanning(false);
+       if ((err as Error).name !== 'AbortError') {
+        setErrors([{ item: "General Engine Failure", message: (err as Error).message }]);
+      }
     } finally {
       if (allResults.length > 0) {
          setIsScanning(false);
+          abortControllerRef.current = null;
       }
     }
   };
