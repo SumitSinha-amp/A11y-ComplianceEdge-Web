@@ -190,12 +190,12 @@ const FileScanner: React.FC<FileScannerProps> = ({ onComplete }) => {
       </div>
 
       {isScanning && (
-        <div className="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-xl flex items-center justify-center p-8">
+        <div className="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-xl flex items-center justify-center p-8 !mt-0">
            <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[48px] p-12 shadow-2xl space-y-10 animate-in zoom-in duration-300">
               <div className="h-4 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                  <div className="h-full bg-indigo-600 transition-all duration-500" style={{ width: `${progress}%` }}></div>
               </div>
-              <div className="text-center font-black text-slate-900 dark:text-white text-xl">
+              <div className="text-center font-black text-slate-900 dark:text-white text-sm">
                  Analyzing: {currentFile}...
               </div>
               <div className="p-6 bg-slate-900 rounded-3xl text-emerald-400 font-mono text-[10px] h-32 overflow-hidden shadow-inner">
