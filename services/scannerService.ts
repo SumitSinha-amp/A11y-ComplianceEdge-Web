@@ -436,30 +436,50 @@ export class ScannerService {
     return this.scanRawHtml(html, "AEM Page Audit", path, batchId, mode, onProgress, baseUrl);
   }
 
-    static async fetchPageHtml(path: string): Promise<string> {
-    // Normalize URL: Ensure protocol exists
+    static async fetchPageHtml(path: string, abortSignal?: AbortSignal): Promise<string> {
     let targetUrl = path.trim();
     if (!targetUrl.startsWith('http')) {
       targetUrl = `https://${targetUrl}`;
     }
 
+    // Proxy list for better resilience against CORS blocks
+    const proxies = [
+      (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+      (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+    ];
+
+    let lastError = "";
+
+    // Attempt direct fetch first (if same-origin or CORS allowed)
     try {
-      // Primary attempt: AllOrigins Proxy to bypass CORS
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-      const response = await fetch(proxyUrl);
-      if (!response.ok) throw new Error(`Network access failed: ${response.statusText}`);
-      const text = await response.text();
-      if (!text || text.trim().length < 50) throw new Error("Received insufficient HTML content from target.");
-      return text;
+      const response = await fetch(targetUrl, { signal: abortSignal });
+      if (response.ok) {
+        const text = await response.text();
+        if (text && text.trim().length > 50) return text;
+      }
     } catch (e) {
-      console.warn(`Proxy fetch failed for ${targetUrl}, attempting direct fetch fallback...`, e);
+      lastError = (e as Error).message;
+      if (abortSignal?.aborted) throw e;
+    }
+
+    // Try proxies sequentially
+    for (const proxyFn of proxies) {
+      if (abortSignal?.aborted) throw new Error("Fetch aborted.");
       try {
-          const response = await fetch(targetUrl);
-          if (!response.ok) throw new Error(`Access Denied: ${response.statusText}`);
-          return await response.text();
-      } catch (innerErr) {
-          throw new Error(`Accessibility engine could not connect to: ${targetUrl}. The domain may be protected or invalid.`);
+        const proxiedUrl = proxyFn(targetUrl);
+        const response = await fetch(proxiedUrl, { signal: abortSignal });
+        if (response.ok) {
+          const text = await response.text();
+          if (text && text.trim().length > 50) return text;
+        } else {
+           lastError = `Proxy error: ${response.status} ${response.statusText}`;
+        }
+      } catch (e) {
+        lastError = (e as Error).message;
+        if (abortSignal?.aborted) throw e;
       }
     }
+
+    throw new Error(`Accessibility engine could not connect to: ${targetUrl}. Technical reason: ${lastError || "CORS policy or network block"}`);
   }
 }

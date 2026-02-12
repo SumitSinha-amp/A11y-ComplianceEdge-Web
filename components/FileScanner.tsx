@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { ScanMode, PageScanResult } from '../types';
 import { ScannerService } from '../services/scannerService';
 
@@ -20,7 +20,7 @@ const FileScanner: React.FC<FileScannerProps> = ({ onComplete }) => {
   const [files, setFiles] = useState<File[]>([]);
   const [scanLogs, setScanLogs] = useState<string[]>([]);
   const [errors, setErrors] = useState<ScanError[]>([]);
-
+  const abortControllerRef = useRef<AbortController | null>(null);
   const addLog = (msg: string) => {
     setScanLogs(prev => [msg, ...prev].slice(0, 8));
   };
@@ -30,13 +30,20 @@ const FileScanner: React.FC<FileScannerProps> = ({ onComplete }) => {
       setFiles(Array.from(e.target.files));
     }
   };
-
+  const handleAbort = () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        addLog("Abort requested...");
+      }
+    };
   const handleScan = async () => {
     if (isScanning) return;
     setIsScanning(true);
     setErrors([]);
     setProgress(0);
     setScanLogs(["Initializing Auditor Engines..."]);
+    abortControllerRef.current = new AbortController();
+    const { signal } = abortControllerRef.current;
     const batchId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
     const allResults: PageScanResult[] = [];
 
@@ -204,6 +211,9 @@ const FileScanner: React.FC<FileScannerProps> = ({ onComplete }) => {
               <div className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">
                 Multi-Engine Analysis Running...
               </div>
+              <button onClick={event => { { handleAbort; } }} className="w-full py-3 bg-rose-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all">
+                   ABORT SCAN
+                 </button>
            </div>
         </div>
       )}
