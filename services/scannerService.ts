@@ -317,7 +317,7 @@ export class ScannerService {
     return indicators.some(indicator => html.includes(indicator));
   }
 
-  static async scanRawHtml(html: string, title: string, path: string, batchId: string, mode: ScanMode, onProgress?: (msg: string) => void): Promise<PageScanResult> {
+  static async scanRawHtml(html: string, title: string, path: string, batchId: string, mode: ScanMode, onProgress?: (msg: string) => void, baseUrl?: string): Promise<PageScanResult> {
     const isAem = this.detectAemContext(html);
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
@@ -390,7 +390,7 @@ export class ScannerService {
             scanId: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
             batchId,
             mode,
-            path: path || (isAem ? "AEM Page Content" : "HTML File"),
+            path: path || (isAem ? "AEM Page Content" : "HTML File") || "Source",
             title: doc.title || title || "Audit Result",
             url: "local://audit",
             issues: [...axeIssues, ...siaIssues],
@@ -409,13 +409,15 @@ export class ScannerService {
       };
 
       const axeScriptUrl = "https://cdn.jsdelivr.net/npm/axe-core@4.11.1/axe.min.js";
-      const fullHtml = html.includes('<html') ? html : `<!DOCTYPE html><html lang="en"><head><title>${title}</title></head><body>${html}</body></html>`;
-      
+      let processedHtml = html.includes('<html') ? html : `<!DOCTYPE html><html lang="en"><head><title>${title}</title></head><body>${html}</body></html>`;
+      if (baseUrl) {
+        processedHtml = processedHtml.replace('<head>', `<head><base href="${baseUrl}">`);
+      }
       iframe.srcdoc = `
         <!DOCTYPE html>
         <html>
           <head><script src="${axeScriptUrl}"></script></head>
-          <body>${fullHtml}</body>
+          <body>${processedHtml}</body>
         </html>
       `;
     });
@@ -424,26 +426,40 @@ export class ScannerService {
   static async scanPage(path: string, batchId: string, mode: ScanMode, onProgress?: (msg: string) => void): Promise<PageScanResult> {
     onProgress?.(`Fetching content for path: ${path}`);
     const html = await this.fetchPageHtml(path);
-    return this.scanRawHtml(html, "AEM Page Audit", path, batchId, mode, onProgress);
+    let baseUrl = undefined;
+    if (path.startsWith('http')) {
+        try {
+            const urlObj = new URL(path);
+            baseUrl = urlObj.origin + urlObj.pathname.substring(0, urlObj.pathname.lastIndexOf('/') + 1);
+        } catch (e) {}
+    }
+    return this.scanRawHtml(html, "AEM Page Audit", path, batchId, mode, onProgress, baseUrl);
   }
 
-  static async fetchPageHtml(path: string): Promise<string> {
+    static async fetchPageHtml(path: string): Promise<string> {
+    // Normalize URL: Ensure protocol exists
+    let targetUrl = path.trim();
+    if (!targetUrl.startsWith('http')) {
+      targetUrl = `https://${targetUrl}`;
+    }
+
     try {
-      const url = path.startsWith('http') ? path : (path.endsWith('.html') ? path : `${path}.html`);
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`Fetch Failed: ${response.statusText}`);
-      return await response.text();
+      // Primary attempt: AllOrigins Proxy to bypass CORS
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+      const response = await fetch(proxyUrl);
+      if (!response.ok) throw new Error(`Network access failed: ${response.statusText}`);
+      const text = await response.text();
+      if (!text || text.trim().length < 50) throw new Error("Received insufficient HTML content from target.");
+      return text;
     } catch (e) {
-      return `<!DOCTYPE html><html lang="en"><head><title>AEM WKND Demo</title></head><body>
-        <div id="main">
-          <h1>WKND Experience Page</h1>
-          <div id="duplicate">Content 1</div>
-          <div id="duplicate">Content 2</div>
-          <img src="/hero.jpg">
-          <input type="text" placeholder="No label">
-          <button style="width: 10px; height: 10px">Small</button>
-        </div>
-      </body></html>`;
+      console.warn(`Proxy fetch failed for ${targetUrl}, attempting direct fetch fallback...`, e);
+      try {
+          const response = await fetch(targetUrl);
+          if (!response.ok) throw new Error(`Access Denied: ${response.statusText}`);
+          return await response.text();
+      } catch (innerErr) {
+          throw new Error(`Accessibility engine could not connect to: ${targetUrl}. The domain may be protected or invalid.`);
+      }
     }
   }
 }
