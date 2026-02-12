@@ -34,6 +34,7 @@ const FileScanner: React.FC<FileScannerProps> = ({ onComplete }) => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         addLog("Abort requested...");
+           
       }
     };
   const handleScan = async () => {
@@ -65,6 +66,7 @@ const FileScanner: React.FC<FileScannerProps> = ({ onComplete }) => {
           } catch (err) {
             if ((err as Error).name === 'AbortError' || signal.aborted) {
                addLog("Scan Aborted.");
+               setIsScanning(false);
                break;
             }
             setErrors(prev => [...prev, { item: url, message: (err as Error).message }]);
@@ -103,10 +105,8 @@ const FileScanner: React.FC<FileScannerProps> = ({ onComplete }) => {
         setErrors([{ item: "General Engine Failure", message: (err as Error).message }]);
       }
     } finally {
-      if (allResults.length > 0) {
          setIsScanning(false);
           abortControllerRef.current = null;
-      }
     }
   };
 
