@@ -124,7 +124,7 @@ const App: React.FC = () => {
       <Header activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab)} />
       
       <main className="flex-grow w-full mx-auto px-4 py-8">
-        {activeTab === 'fileScanner' && (
+         {activeTab === 'fileScanner' && (
           <div className="space-y-8">
             <FileScanner onComplete={handleScanComplete} />
           </div>
@@ -138,7 +138,14 @@ const App: React.FC = () => {
             onClear={clearHistory} 
           />
         )}
-        {activeTab === 'reports' && <ReportsView results={results} onViewDetails={handleViewDetails} onViewBatch={handleViewBatch} />}
+        {activeTab === 'reports' && (
+          <ReportsView 
+            results={results} 
+            onViewDetails={handleViewDetails} 
+            onViewBatch={handleViewBatch} 
+            onDeleteScan={deleteScan}
+          />
+        )} 
       </main>
 
       <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-8 text-center text-slate-500 dark:text-slate-400 text-sm no-print transition-colors">

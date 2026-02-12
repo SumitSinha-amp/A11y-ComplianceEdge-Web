@@ -7,9 +7,10 @@ interface ReportsViewProps {
   results: PageScanResult[];
   onViewDetails: (scan: PageScanResult) => void;
   onViewBatch: (batch: PageScanResult[]) => void;
+  onDeleteScan: (scanId: string) => void;
 }
 
-const ReportsView: React.FC<ReportsViewProps> = ({ results, onViewDetails, onViewBatch }) => {
+const ReportsView: React.FC<ReportsViewProps> = ({ results, onViewDetails, onViewBatch, onDeleteScan }) => {
   const [search, setSearch] = useState('');
   const [selectedReport, setSelectedReport] = useState<{ scan: PageScanResult; ai: boolean } | null>(null);
 
@@ -49,8 +50,14 @@ const ReportsView: React.FC<ReportsViewProps> = ({ results, onViewDetails, onVie
     const design = issues.filter(i => i.category === 'Design').length;
     const content = issues.filter(i => i.category === 'Content').length;
     const dev = issues.filter(i => i.category === 'Development' || !i.category).length;
-    const total = issues.length || 1;
     return { design, content, dev };
+  };
+
+  const confirmDelete = (e: React.MouseEvent, scanId: string, title: string) => {
+    e.stopPropagation();
+    if (window.confirm(`Are you sure you want to delete the scorecard for "${title}"?`)) {
+      onDeleteScan(scanId);
+    }
   };
 
   if (results.length === 0) {
@@ -109,7 +116,16 @@ const ReportsView: React.FC<ReportsViewProps> = ({ results, onViewDetails, onVie
           const breakdown = getCategoryBreakdown(scan.issues);
           
           return (
-            <div key={scan.scanId} className="bg-white dark:bg-slate-900 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/10 transition-all group flex flex-col overflow-hidden">
+            <div key={scan.scanId} className="bg-white dark:bg-slate-900 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/10 transition-all group flex flex-col overflow-hidden relative">
+              {/* Individual Delete Button */}
+              <button 
+                onClick={(e) => confirmDelete(e, scan.scanId, scan.title)}
+                className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-rose-600 bg-white dark:bg-slate-800 rounded-full shadow-lg transition-all z-20 border dark:border-slate-700"
+                title="Delete scorecard"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              </button>
+
               <div className="p-8 pb-4">
                 <div className="flex justify-between items-start mb-6">
                   <div className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest ${healthScore > 80 ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600' : 'bg-rose-50 dark:bg-rose-900/20 text-rose-600'}`}>
@@ -117,7 +133,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ results, onViewDetails, onVie
                   </div>
                   <span className="text-[10px] font-black text-slate-300 dark:text-slate-700">#{scan.scanId.slice(0, 6).toUpperCase()}</span>
                 </div>
-                <h3 className="text-xl font-black text-slate-900 dark:text-white leading-tight mb-2 truncate group-hover:text-indigo-600 transition-colors">{scan.title}</h3>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white leading-tight mb-2 truncate group-hover:text-indigo-600 transition-colors pr-8">{scan.title}</h3>
                 <p className="text-[10px] text-slate-400 font-mono truncate">{scan.path}</p>
               </div>
 

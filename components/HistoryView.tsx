@@ -66,10 +66,22 @@ const HistoryView: React.FC<HistoryViewProps> = ({ results, onViewDetails, onDel
 
   const comparison = getComparisonData();
 
-  const confirmDelete = (e: React.MouseEvent, scanId: string) => {
+  const confirmDeleteIndividual = (e: React.MouseEvent, scanId: string) => {
     e.stopPropagation();
     if (window.confirm("Delete this specific audit record?")) {
       onDeleteScan(scanId);
+    }
+  };
+
+  const confirmDeletePathGroup = (e: React.MouseEvent, path: string) => {
+    e.stopPropagation();
+    const count = pathGroups[path].length;
+    if (window.confirm(`Delete all ${count} audit records for this path? This action cannot be undone.`)) {
+      const scanIds = pathGroups[path].map(s => s.scanId);
+      scanIds.forEach(id => onDeleteScan(id));
+      if (selectedPath === path) {
+        setSelectedPath(null);
+      }
     }
   };
 
@@ -127,6 +139,13 @@ const HistoryView: React.FC<HistoryViewProps> = ({ results, onViewDetails, onDel
                   </div>
                   <div className="flex items-center gap-3">
                     <button 
+                      onClick={(e) => confirmDeletePathGroup(e, path)}
+                      className="p-3 text-slate-400 hover:text-rose-600 bg-slate-50 dark:bg-slate-800 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                      title="Delete all history for this path"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                    <button 
                       onClick={() => setSelectedPath(path)}
                       className="px-6 py-2.5 bg-slate-900 dark:bg-slate-800 text-white rounded-xl text-[10px] font-black hover:bg-indigo-600 transition-all uppercase tracking-widest"
                     >
@@ -141,10 +160,18 @@ const HistoryView: React.FC<HistoryViewProps> = ({ results, onViewDetails, onDel
       ) : (
         <div className="space-y-6 animate-in slide-in-from-right duration-300">
            <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden transition-colors">
-              <button onClick={() => { setSelectedPath(null); setComparisonSelection([]); }} className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 mb-6 flex items-center gap-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 w-fit px-3 py-1 rounded-lg uppercase tracking-widest transition-all">
-                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
-                 Return to List
-              </button>
+              <div className="flex justify-between items-start mb-6">
+                <button onClick={() => { setSelectedPath(null); setComparisonSelection([]); }} className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 w-fit px-3 py-1 rounded-lg uppercase tracking-widest transition-all">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
+                  Return to List
+                </button>
+                <button 
+                  onClick={(e) => confirmDeletePathGroup(e, selectedPath)}
+                  className="px-4 py-1 text-[10px] font-black text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg uppercase tracking-widest transition-all"
+                >
+                  Delete All Records
+                </button>
+              </div>
               
               <div className="flex justify-between items-end mb-10">
                 <div>
@@ -173,8 +200,8 @@ const HistoryView: React.FC<HistoryViewProps> = ({ results, onViewDetails, onDel
                         className={`cursor-pointer p-6 rounded-[32px] border-2 transition-all relative group ${isSelected ? 'border-indigo-600 bg-indigo-50/20 dark:bg-indigo-900/10' : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-700'}`}
                       >
                         <button 
-                          onClick={(e) => confirmDelete(e, scan.scanId)}
-                          className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 p-2 text-rose-400 hover:text-rose-600 transition-all z-20"
+                          onClick={(e) => confirmDeleteIndividual(e, scan.scanId)}
+                          className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 p-2 text-rose-400 hover:text-rose-600 bg-white dark:bg-slate-900 rounded-full shadow-lg transition-all z-20 border dark:border-slate-700"
                           title="Delete specific record"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
