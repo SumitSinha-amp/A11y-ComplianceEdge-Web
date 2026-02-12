@@ -75,7 +75,7 @@ const FileScanner: React.FC<FileScannerProps> = ({ onComplete }) => {
       } else if (activeInput === 'code') {
         if (!code.trim()) throw new Error("Manual source code input is empty.");
         setCurrentFile('Source Editor');
-        const result = await ScannerService.scanRawHtml(code, 'Manual Audit', 'Editor Source', batchId, ScanMode.SINGLE, (m) => addLog(m), signal);
+           const result = await ScannerService.scanRawHtml(code, 'Manual Audit', 'Editor Source', batchId, ScanMode.SINGLE, (m) => addLog(m), undefined, signal);
         allResults.push(result);
         setProgress(100);
       } else {
