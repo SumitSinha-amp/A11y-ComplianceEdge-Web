@@ -129,7 +129,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ scans }) => {
 
         <div className="lg:col-span-8 space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 bg-white dark:bg-slate-900 p-10 rounded-[40px] border dark:border-slate-800 shadow-sm transition-colors">
-            <div className="space-y-1">
+            <div className="space-y-1 w-[600px]">
               <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{activeScan?.title}</h2>
               <p className="text-slate-400 dark:text-slate-500 text-xs font-mono truncate max-w-md">{activeScan?.path}</p>
             </div>
