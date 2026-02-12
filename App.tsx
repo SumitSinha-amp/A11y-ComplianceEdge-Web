@@ -123,7 +123,7 @@ const App: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
       <Header activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab)} />
       
-      <main className="flex-grow container mx-auto px-4 py-8">
+      <main className="flex-grow w-full mx-auto px-4 py-8">
         {activeTab === 'fileScanner' && (
           <div className="space-y-8">
             <FileScanner onComplete={handleScanComplete} />
