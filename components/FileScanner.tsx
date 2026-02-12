@@ -81,11 +81,12 @@ const FileScanner: React.FC<FileScannerProps> = ({ onComplete }) => {
       } else {
         if (files.length === 0) throw new Error("Please select or drop HTML files to begin.");
         for (let i = 0; i < files.length; i++) {
+          if (signal.aborted) break;
           const f = files[i];
           setCurrentFile(f.name);
           try {
             const html = await f.text();
-            const result = await ScannerService.scanRawHtml(html, f.name, `file://${f.name}`, batchId, files.length > 1 ? ScanMode.MULTIPLE : ScanMode.SINGLE, (m) => addLog(m));
+             const result = await ScannerService.scanRawHtml(html, f.name, `file://${f.name}`, batchId, files.length > 1 ? ScanMode.MULTIPLE : ScanMode.SINGLE, (m) => addLog(m), undefined, signal);
             allResults.push(result);
           } catch (err) {
             if ((err as Error).name === 'AbortError' || signal.aborted) break;

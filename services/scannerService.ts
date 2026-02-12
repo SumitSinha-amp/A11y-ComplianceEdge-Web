@@ -391,6 +391,7 @@ export class ScannerService {
           ];
 
           // STAGE 2: COMPREHENSIVE SIA ENGINE
+           if (abortSignal?.aborted) return;
           onProgress?.("Stage 2: Analyzing with SIA Alfa Custom Accessibilty Engine...");
           const siaEngine = new SIAEngine();
           const siaIssues = await siaEngine.runAllChecks(doc, win);
