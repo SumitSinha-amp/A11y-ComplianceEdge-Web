@@ -217,7 +217,7 @@ const FileScanner: React.FC<FileScannerProps> = ({ onComplete }) => {
               <div className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">
                 Multi-Engine Analysis Running...
               </div>
-              <button onClick={event => { { handleAbort; } }} className="w-full py-3 bg-rose-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all">
+              <button onClick={() => handleAbort()} className="w-full py-3 bg-rose-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all">
                    ABORT SCAN
                  </button>
            </div>
