@@ -317,7 +317,7 @@ export class ScannerService {
     return indicators.some(indicator => html.includes(indicator));
   }
 
-  static async scanRawHtml(html: string, title: string, path: string, batchId: string, mode: ScanMode, onProgress?: (msg: string) => void, baseUrl?: string): Promise<PageScanResult> {
+  static async scanRawHtml(html: string, title: string, path: string, batchId: string, mode: ScanMode, onProgress?: (msg: string) => void, baseUrl?: string, abortSignal?: AbortSignal): Promise<PageScanResult> {
     const isAem = this.detectAemContext(html);
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
@@ -328,6 +328,13 @@ export class ScannerService {
     document.body.appendChild(iframe);
 
     return new Promise((resolve, reject) => {
+       const onAbort = () => {
+        clearTimeout(timeout);
+        if (iframe.parentNode) document.body.removeChild(iframe);
+        reject(new Error("Audit aborted by user."));
+      };
+        if (abortSignal?.aborted) return onAbort();
+      abortSignal?.addEventListener('abort', onAbort);
       const timeout = setTimeout(() => {
         if (iframe.parentNode) document.body.removeChild(iframe);
         reject(new Error("Accessibility Audit Timed Out."));
@@ -335,13 +342,15 @@ export class ScannerService {
 
       iframe.onload = async () => {
         try {
+           if (abortSignal?.aborted) return;
           const doc = iframe.contentDocument || iframe.contentWindow?.document;
           const win = iframe.contentWindow;
           if (!doc || !win) throw new Error("Sandbox access failed.");
 
           // STAGE 1: AXE CORE
           onProgress?.("Stage 1: Running Axe Core ...");
-          if (!(win as any).axe) await new Promise(r => setTimeout(r, 1000));
+          await new Promise(r => setTimeout(r, 500));
+          if (abortSignal?.aborted) return;
 
           const axeResults = await (win as any).axe.run(doc, {
             runOnly: ['wcag2a', 'wcag2aa', 'wcag2aaa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa', 'best-practice']
@@ -399,10 +408,12 @@ export class ScannerService {
           };
 
           clearTimeout(timeout);
+           abortSignal?.removeEventListener('abort', onAbort);
           document.body.removeChild(iframe);
           resolve(result);
         } catch (err) {
           clearTimeout(timeout);
+          abortSignal?.removeEventListener('abort', onAbort);
           if (iframe.parentNode) document.body.removeChild(iframe);
           reject(err);
         }
@@ -423,9 +434,9 @@ export class ScannerService {
     });
   }
 
-  static async scanPage(path: string, batchId: string, mode: ScanMode, onProgress?: (msg: string) => void): Promise<PageScanResult> {
-    onProgress?.(`Fetching content for path: ${path}`);
-    const html = await this.fetchPageHtml(path);
+ static async scanPage(path: string, batchId: string, mode: ScanMode, onProgress?: (msg: string) => void, abortSignal?: AbortSignal): Promise<PageScanResult> {
+    onProgress?.(`Fetching content for: ${path}`);
+    const html = await this.fetchPageHtml(path, abortSignal);
     let baseUrl = undefined;
     if (path.startsWith('http')) {
         try {
@@ -433,7 +444,7 @@ export class ScannerService {
             baseUrl = urlObj.origin + urlObj.pathname.substring(0, urlObj.pathname.lastIndexOf('/') + 1);
         } catch (e) {}
     }
-    return this.scanRawHtml(html, "AEM Page Audit", path, batchId, mode, onProgress, baseUrl);
+    return this.scanRawHtml(html, "AEM Page Audit", path, batchId, mode, onProgress, baseUrl, abortSignal);
   }
 
     static async fetchPageHtml(path: string, abortSignal?: AbortSignal): Promise<string> {

@@ -58,7 +58,7 @@ const FileScanner: React.FC<FileScannerProps> = ({ onComplete }) => {
           setCurrentFile(url);
           addLog(`Scanning target: ${url}`);
           try {
-            const result = await ScannerService.scanPage(url, batchId, urlList.length > 1 ? ScanMode.MULTIPLE : ScanMode.SINGLE, (m) => addLog(m));
+            const result = await ScannerService.scanPage(url, batchId, urlList.length > 1 ? ScanMode.MULTIPLE : ScanMode.SINGLE, (m) => addLog(m), signal);
             allResults.push(result);
             // Throttle slightly for bulk requests to avoid proxy rate-limiting
             if (urlList.length > 1) await new Promise(r => setTimeout(r, 300));
@@ -75,7 +75,7 @@ const FileScanner: React.FC<FileScannerProps> = ({ onComplete }) => {
       } else if (activeInput === 'code') {
         if (!code.trim()) throw new Error("Manual source code input is empty.");
         setCurrentFile('Source Editor');
-        const result = await ScannerService.scanRawHtml(code, 'Manual Audit', 'Editor Source', batchId, ScanMode.SINGLE, (m) => addLog(m));
+        const result = await ScannerService.scanRawHtml(code, 'Manual Audit', 'Editor Source', batchId, ScanMode.SINGLE, (m) => addLog(m), signal);
         allResults.push(result);
         setProgress(100);
       } else {
