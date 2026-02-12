@@ -10,6 +10,7 @@ export interface FixResult {
     snippetBefore: string;
     snippetAfter: string;
     selector?: string;
+    ruleId?: string;
   }[];
 }
 
@@ -45,32 +46,39 @@ export class GeminiService {
   }
 
   /**
-   * Fixes HTML using a "Patching Strategy" to avoid JSON truncation errors.
-   * Instead of the full HTML, we ask for specific selectors and their fixes.
+   * Fixes HTML using a "Targeted Patching Strategy".
+   * Receives detected issues to ensure remediation specifically addresses reported violations.
    */
-  static async fixHtml(originalHtml: string): Promise<FixResult> {
+  static async fixHtml(originalHtml: string, issues: AccessibilityIssue[]): Promise<FixResult> {
     const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) throw new Error("API Key missing");
 
     const ai = new GoogleGenAI({ apiKey });
     
-    const systemInstruction = `You are a specialized Accessibility Remediation Engine.
-    Instead of returning the whole HTML, you must identify specific elements that need fixing and return an array of patches.
-    For each patch, provide a CSS selector that uniquely identifies the element in the provided HTML and the new, corrected HTML snippet for that element.`;
+    // Format issues for the prompt
+    const issueSummary = issues.map(i => `- [${i.id}] ${i.help}: ${i.description}`).join('\n');
+
+    const systemInstruction = `You are a specialized Accessibility Remediation Engine. 
+    Your goal is to reduce the violation count to ZERO. 
+    Focus specifically on the provided list of violations.
+    Return a JSON object with 'appliedFixes' containing CSS selectors and the corrected HTML.
+    Ensure 'snippetAfter' actually resolves the specific WCAG failure for that element.`;
 
     const prompt = `
-      Analyze the provided HTML for accessibility violations (WCAG 2.1 AA).
-      Return a JSON object with an array of "appliedFixes".
-      
-      Each fix object must contain:
-      1. "selector": A unique CSS selector to find the element (e.g., "img[src*='hero']", "button.submit", "h2:nth-of-type(2)").
-      2. "category": "Design", "Content", or "Development".
-      3. "description": What was fixed.
-      4. "snippetBefore": The original HTML of the element.
-      5. "snippetAfter": The corrected HTML of the element.
+      I have detected the following accessibility violations in my HTML:
+      ${issueSummary}
 
       Input HTML:
       ${originalHtml}
+
+      Please provide targeted fixes for these specific elements. 
+      For each fix, return:
+      1. "selector": CSS selector to find the element.
+      2. "ruleId": The ID of the rule being fixed (e.g. 'color-contrast', 'SIA-R2').
+      3. "category": "Design", "Content", or "Development".
+      4. "description": Brief explanation of the fix.
+      5. "snippetBefore": The original element HTML.
+      6. "snippetAfter": The corrected element HTML that resolves the violation.
     `;
 
     try {
@@ -91,6 +99,7 @@ export class GeminiService {
                   type: Type.OBJECT,
                   properties: {
                     selector: { type: Type.STRING },
+                    ruleId: { type: Type.STRING },
                     category: { type: Type.STRING },
                     description: { type: Type.STRING },
                     snippetBefore: { type: Type.STRING },
@@ -106,72 +115,35 @@ export class GeminiService {
       });
       
       let text = response.text?.trim() || "";
-      
-      // Cleanup common model formatting artifacts
       text = text.replace(/^```json/, "").replace(/```$/, "").trim();
 
-      try {
-        const rawResult = JSON.parse(text);
-        const patches = rawResult.appliedFixes || [];
-        
-        // Apply patches to the original HTML locally
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(originalHtml, 'text/html');
-        
-        patches.forEach((patch: any) => {
-          try {
-            const element = doc.querySelector(patch.selector);
-            if (element) {
-              const tempDiv = document.createElement('div');
-              tempDiv.innerHTML = patch.snippetAfter.trim();
-              const newNode = tempDiv.firstElementChild;
-              if (newNode) {
-                element.replaceWith(newNode);
-              }
+      const rawResult = JSON.parse(text);
+      const patches = rawResult.appliedFixes || [];
+      
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(originalHtml, 'text/html');
+      
+      patches.forEach((patch: any) => {
+        try {
+          const element = doc.querySelector(patch.selector);
+          if (element) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = patch.snippetAfter.trim();
+            const newNode = tempDiv.firstElementChild;
+            if (newNode) {
+              element.replaceWith(newNode);
             }
-          } catch (selectorError) {
-            console.warn(`Could not apply patch for selector: ${patch.selector}`, selectorError);
           }
-        });
+        } catch (e) {}
+      });
 
-        return {
-          fixedHtml: doc.documentElement.outerHTML,
-          appliedFixes: patches
-        };
-      } catch (parseError) {
-        console.error("Failed to parse AI patches:", text);
-        // Fallback: try to find any valid JSON structure if the model added text around it
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          try {
-            const fixedJson = JSON.parse(jsonMatch[0]);
-            // Recurse once with fixed JSON if found
-            return this.applyPatches(originalHtml, fixedJson.appliedFixes || []);
-          } catch (innerError) {
-            throw new Error("AI response was malformed and couldn't be recovered.");
-          }
-        }
-        throw new Error("The AI remediation response was invalid.");
-      }
+      return {
+        fixedHtml: doc.documentElement.outerHTML,
+        appliedFixes: patches
+      };
     } catch (e) {
-      console.error("Gemini Fix Error:", e);
+      console.error("Gemini Targeted Fix Error:", e);
       throw e;
     }
-  }
-  private static applyPatches(originalHtml: string, patches: any[]): FixResult {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(originalHtml, 'text/html');
-    patches.forEach((patch: any) => {
-      try {
-        const element = doc.querySelector(patch.selector);
-        if (element) {
-          element.outerHTML = patch.snippetAfter;
-        }
-      } catch (e) {}
-    });
-    return {
-      fixedHtml: doc.documentElement.outerHTML,
-      appliedFixes: patches
-    };
   }
 }
