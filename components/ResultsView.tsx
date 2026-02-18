@@ -227,7 +227,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ scans }) => {
                   </>
                 )}
               </button>
-              
+              <div className="relative">
                 <button 
                   onClick={() => setShowExportMenu(!showExportMenu)}
                   className="px-6 py-3.5 bg-slate-900 text-white rounded-2xl font-black text-[10px] tracking-widest uppercase hover:bg-black transition-all flex items-center gap-2"
@@ -252,7 +252,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ scans }) => {
                   </div>
                 )}
               
-              
+              </div>
               <div className="bg-slate-50 dark:bg-slate-800 px-6 py-3 rounded-2xl text-center border dark:border-slate-700 transition-colors">
                 <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400 leading-none">{activeScan?.issues.length}</div>
                 <div className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">Issues</div>
