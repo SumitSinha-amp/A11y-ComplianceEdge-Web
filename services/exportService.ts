@@ -1,8 +1,6 @@
 
 import { PageScanResult, AccessibilityIssue } from '../types';
-//import html2canvas from "html2canvas";
-//import jsPDF from "jspdf";
-import html2pdf from "html2pdf.js";
+//import html2pdf from "html2pdf.js";
 //declare const html2pdf: any;
 
 export class ExportService {
@@ -65,6 +63,7 @@ export class ExportService {
    * This handles page breaks and CSS styling much better than manual canvas slicing.
    */
   static async generatePDF(element: HTMLElement, filename: string) {
+     const { default: html2pdf } = await import("html2pdf.js");
     // Add a class to the element to help with print-specific styling
     const originalClass = element.className;
     const isDarkMode = document.documentElement.classList.contains('dark');
