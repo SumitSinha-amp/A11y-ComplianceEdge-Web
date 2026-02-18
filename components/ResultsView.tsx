@@ -284,7 +284,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ scans }) => {
                     <td className="px-8 py-5 text-center"><span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-tight ${getCategoryStyles(issue.category)}`}>{issue.category || 'Development'}</span></td>
                     <td className="px-8 py-5 text-center"><span className="font-black text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-xl text-xs">{issue.nodes.length}</span></td>
                     <td className="px-8 py-5 text-center"><span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${issue.conformance === 'A' ? 'text-rose-600' : 'text-indigo-600'}`}>{issue.conformance || 'S'}</span></td>
-                    <td className="px-8 py-5 text-right"><button onClick={() => setSelectedIssue(issue)} className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[9px] tracking-widest hover:bg-black transition-all shadow-md">View Report</button></td>
+                    <td className="px-5 py-3 text-right"><button onClick={() => setSelectedIssue(issue)} className="px-8 py-2 bg-indigo-600 text-white rounded-xl font-bold text-[10px] tracking-widest hover:bg-black transition-all shadow-md">View Report</button></td>
                   </tr>
                 ))}
               </tbody>
