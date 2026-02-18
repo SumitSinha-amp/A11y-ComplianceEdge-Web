@@ -42,6 +42,17 @@ body {
   animation: scan-line 2s linear infinite;
 }
 
+/* PDF Export Utilities */
+.pdf-avoid-break {
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
+}
+
+.pdf-page-break-before {
+  break-before: page !important;
+  page-break-before: always !important;
+}
+
 /* Print Styles for PDF Export */
 @media print {
   header, footer, nav, button, .no-print, [role="radiogroup"], .filter-bar {
@@ -61,9 +72,5 @@ body {
 
   table {
     border: 1px solid #e2e8f0;
-  }
-
-  tr {
-    page-break-inside: avoid;
   }
 }

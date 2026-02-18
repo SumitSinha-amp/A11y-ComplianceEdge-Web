@@ -1,7 +1,6 @@
-
 import { PageScanResult, AccessibilityIssue } from '../types';
-//import html2pdf from "html2pdf.js";
-//declare const html2pdf: any;
+
+declare const html2pdf: any;
 
 export class ExportService {
   private static downloadFile(content: string, filename: string, mimeType: string) {
@@ -59,18 +58,14 @@ export class ExportService {
   }
 
   /**
-   * Generates a multi-page PDF using html2pdf.
-   * This handles page breaks and CSS styling much better than manual canvas slicing.
+   * Generates a professional multi-page PDF using html2pdf.
+   * Leverages CSS break-inside: avoid for clean sectioning.
    */
   static async generatePDF(element: HTMLElement, filename: string) {
-     const { default: html2pdf } = await import("html2pdf.js");
-    // Add a class to the element to help with print-specific styling
-    const originalClass = element.className;
-    const isDarkMode = document.documentElement.classList.contains('dark');
-    
-    // Create export configuration
+    // PDF Configuration
+    const { default: html2pdf } = await import("html2pdf.js");
     const opt = {
-      margin: [10, 10, 10, 10], // top, left, bottom, right in mm
+      margin: 10,
       filename: `${filename.replace(/\s+/g, '_')}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { 
@@ -78,44 +73,38 @@ export class ExportService {
         useCORS: true, 
         letterRendering: true,
         backgroundColor: '#ffffff',
-        // In the clone, force light mode if we are currently in dark mode
         onclone: (clonedDoc: Document) => {
+          // Force pure light mode in the clone
           clonedDoc.documentElement.classList.remove('dark');
           clonedDoc.body.classList.remove('dark');
           clonedDoc.body.style.backgroundColor = '#ffffff';
+          clonedDoc.body.style.color = '#000000';
           
-          // Find the exported element in the clone
-          // Since we might have multiple templates, we use the ref we just captured
-          // But html2pdf handles the target isolation automatically.
+          // Fix potential scaling/overflow issues in the clone
+          const target = clonedDoc.querySelector('.pdf-template-container') as HTMLElement;
+          if (target) {
+            target.style.width = '800px'; // Set exact width for capture
+            target.style.margin = '0 auto';
+          }
         }
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      pagebreak: { mode: ['css', 'legacy'], avoid: '.pdf-avoid-break' }
     };
 
     try {
-      // Ensure element is visible during capture
+      // Temporarily reveal if hidden (though absolute positioning handles this)
       const originalOpacity = element.style.opacity;
-      const originalPointer = element.style.pointerEvents;
-      const originalZ = element.style.zIndex;
-      
       element.style.opacity = '1';
-      element.style.pointerEvents = 'auto';
-      element.style.zIndex = '999999';
 
-      // Wait a moment for layout to settle
-      await new Promise(resolve => setTimeout(resolve, 800));
-
+      // Capture and save
       await html2pdf().set(opt).from(element).save();
       
-      // Restore styles
+      // Restore
       element.style.opacity = originalOpacity;
-      element.style.pointerEvents = originalPointer;
-      element.style.zIndex = originalZ;
-      
     } catch (error) {
       console.error('PDF Export Error:', error);
-      alert('PDF Generation failed: ' + (error as Error).message);
+      alert('Technical error during PDF generation. Please try again.');
     }
   }
 }

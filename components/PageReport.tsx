@@ -145,18 +145,17 @@ const PageReport: React.FC<PageReportProps> = ({ page, initialIssue, autoStartAi
 
   return (
     <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-0 md:p-6 overflow-hidden transition-all duration-300">
-      
-      {/* 
+          {/* 
           PDF template moved far off-screen.
           Used for html2pdf capture. 
-          The 'break-inside-avoid' class is key for proper paging.
+          The 'pdf-avoid-break' class is key for proper paging.
       */}
       <div className="absolute top-0 left-[-10000px] pointer-events-none" aria-hidden="true">
         <div 
           ref={singlePdfTemplateRef} 
-          className="bg-white text-slate-900 p-8 md:p-16 space-y-12 w-[1000px] block" 
+          className="pdf-template-container bg-white text-slate-900 p-8 md:p-12 space-y-12 w-[800px] block" 
         >
-          <div className="border-b-4 border-slate-900 pb-10 flex justify-between items-end break-inside-avoid">
+          <div className="border-b-4 border-slate-900 pb-10 flex justify-between items-end pdf-avoid-break">
             <div className="space-y-2">
               <h1 className="text-4xl font-black tracking-tight uppercase">Technical Accessibility Audit</h1>
               <p className="text-xl font-bold text-indigo-600 leading-tight">{page.title}</p>
@@ -167,28 +166,28 @@ const PageReport: React.FC<PageReportProps> = ({ page, initialIssue, autoStartAi
               <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Page Score</div>
             </div>
           </div>
-          <div className="space-y-12 block">
+          <div className="space-y-10 block">
             {page.issues.map((issue, idx) => (
-              <div key={idx} className="space-y-6 border-l-4 border-slate-100 pl-8 pb-8 block break-inside-avoid">
+              <div key={idx} className="space-y-6 border-l-4 border-slate-100 pl-8 pb-8 block pdf-avoid-break">
                  <div className="flex justify-between items-start">
                     <div>
-                      <h3 className="text-xl font-black">{idx + 1}. {issue.help}</h3>
-                      <p className="text-xs font-mono text-indigo-600 mt-1">Rule: {issue.id} | WCAG: {issue.wcag || 'N/A'}</p>
+                      <h3 className="text-xl font-black text-slate-900 leading-tight pr-12">{idx + 1}. {issue.help}</h3>
+                      <p className="text-[10px] font-mono text-indigo-600 mt-1 uppercase tracking-tight">Rule: {issue.id} | WCAG: {issue.wcag || 'N/A'}</p>
                     </div>
-                    <span className="px-3 py-1 rounded text-[10px] font-black uppercase bg-slate-900 text-white">{issue.impact}</span>
+                    <span className="px-3 py-1 rounded text-[10px] font-black uppercase bg-slate-900 text-white whitespace-nowrap">{issue.impact}</span>
                  </div>
-                 <p className="text-sm text-slate-600 leading-relaxed italic">{issue.description}</p>
+                 <p className="text-sm text-slate-500 leading-relaxed italic">{issue.description}</p>
                  <div className="space-y-4">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Detected Occurrences ({issue.nodes.length})</h4>
+                    <h4 className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Detected Occurrences ({issue.nodes.length})</h4>
                     {issue.nodes.slice(0, 5).map((node, nIdx) => (
-                      <div key={nIdx} className="space-y-2 break-inside-avoid">
+                      <div key={nIdx} className="space-y-2 pdf-avoid-break">
                         <div className="text-[9px] font-bold text-indigo-400 uppercase tracking-tight">INSTANCE {nIdx + 1}</div>
-                        <pre className="p-4 bg-slate-50 rounded-xl text-[10px] font-mono text-slate-800 overflow-hidden whitespace-pre-wrap border border-slate-200">
+                        <pre className="p-4 bg-slate-50 rounded-xl text-[10px] font-mono text-slate-700 overflow-hidden whitespace-pre-wrap border border-slate-100 leading-tight">
                           {node.html}
                         </pre>
                       </div>
                     ))}
-                    {issue.nodes.length > 5 && <p className="text-[10px] text-slate-400 italic">Showing first 5 results in PDF report...</p>}
+                    {issue.nodes.length > 5 && <p className="text-[9px] text-slate-400 italic">... and {issue.nodes.length - 5} additional instances excluded from high-level PDF summary.</p>}
                  </div>
               </div>
             ))}

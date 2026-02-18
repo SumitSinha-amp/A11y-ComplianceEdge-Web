@@ -111,50 +111,55 @@ const ResultsView: React.FC<ResultsViewProps> = ({ scans }) => {
     </div>
   );
 
-  const PDFReportContent = ({ results }: { results: PageScanResult[] }) => (
-    <div className="bg-white text-slate-900 p-8 md:p-16 space-y-16 w-[1000px] block">
-      <div className="text-center border-b-8 border-slate-900 pb-12 break-inside-avoid">
-        <h1 className="text-5xl font-black uppercase tracking-tighter mb-4">Accessibility Master Audit</h1>
-        <p className="text-xl text-slate-500 font-bold uppercase tracking-[0.4em]">A11y ConformEase Report</p>
+const PDFReportContent = ({ results }: { results: PageScanResult[] }) => (
+    <div className="pdf-template-container bg-white text-slate-900 p-8 md:p-12 space-y-12 w-[800px] block">
+      <div className="text-center border-b-8 border-slate-900 pb-10 pdf-avoid-break">
+        <h1 className="text-4xl font-black uppercase tracking-tighter mb-4">Accessibility Master Audit</h1>
+        <p className="text-lg text-slate-500 font-bold uppercase tracking-[0.4em]">A11y ConformEase Scorecard</p>
         <div className="mt-4 text-[10px] font-mono text-slate-400">{new Date().toLocaleString()}</div>
       </div>
+      
       {results.map((scan, sIdx) => (
-        <div key={scan.scanId} className="space-y-12 block border-t-2 border-slate-100 pt-12 first:border-none first:pt-0">
-          <div className="flex justify-between items-end pb-6 break-inside-avoid">
+        <div key={scan.scanId} className={`space-y-10 block ${sIdx > 0 ? 'pdf-page-break-before pt-10' : ''}`}>
+          <div className="flex justify-between items-end border-b-2 border-slate-100 pb-6 pdf-avoid-break">
             <div>
-              <h2 className="text-3xl font-black">{sIdx + 1}. {scan.title}</h2>
-              <p className="text-sm font-mono text-indigo-600 mt-1">{scan.path}</p>
+              <h2 className="text-2xl font-black">{sIdx + 1}. {scan.title}</h2>
+              <p className="text-xs font-mono text-indigo-600 mt-1">{scan.path}</p>
             </div>
             <div className="text-right">
-              <div className="text-5xl font-black">{calculateHealth(scan.issues)}%</div>
-              <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Page Score</div>
+              <div className="text-4xl font-black">{calculateHealth(scan.issues)}%</div>
+              <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Score</div>
             </div>
           </div>
-          <div className="space-y-8 block">
+          <div className="space-y-6 block">
             {scan.issues.map((issue, iIdx) => (
-              <div key={issue.id + iIdx} className="space-y-6 border-l-4 border-slate-200 pl-8 pb-8 block break-inside-avoid">
+              <div key={issue.id + iIdx} className="space-y-4 border-l-4 border-slate-100 pl-8 pb-8 block pdf-avoid-break">
                 <div className="flex justify-between items-start">
-                  <h3 className="text-xl font-black text-slate-900">{sIdx + 1}.{iIdx + 1}. {issue.help}</h3>
-                  <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${issue.impact === 'critical' ? 'bg-rose-600 text-white' : 'bg-slate-900 text-white'}`}>{issue.impact}</span>
+                  <h3 className="text-lg font-black text-slate-900 leading-tight pr-12">{sIdx + 1}.{iIdx + 1}. {issue.help}</h3>
+                  <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase whitespace-nowrap ${issue.impact === 'critical' ? 'bg-rose-600 text-white' : 'bg-slate-900 text-white'}`}>{issue.impact}</span>
                 </div>
-                <p className="text-sm text-slate-600 leading-relaxed italic">{issue.description}</p>
-                <div className="space-y-4">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Occurrences ({issue.nodes.length})</h4>
-                  {issue.nodes.slice(0, 8).map((node, nIdx) => (
-                    <div key={nIdx} className="space-y-2 break-inside-avoid">
-                      <div className="text-[9px] font-bold text-indigo-400">ELEMENT {nIdx + 1}</div>
-                      <pre className="p-4 bg-slate-50 rounded-xl text-[10px] font-mono text-slate-800 overflow-hidden whitespace-pre-wrap border border-slate-200">
+                <p className="text-xs text-slate-500 leading-relaxed font-medium">{issue.description}</p>
+                <div className="space-y-3">
+                  <h4 className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Failures ({issue.nodes.length})</h4>
+                  {issue.nodes.slice(0, 5).map((node, nIdx) => (
+                    <div key={nIdx} className="space-y-1.5 pdf-avoid-break">
+                      <div className="text-[8px] font-bold text-indigo-400">ELEMENT {nIdx + 1}</div>
+                      <pre className="p-4 bg-slate-50 rounded-xl text-[9px] font-mono text-slate-700 overflow-hidden whitespace-pre-wrap border border-slate-100 leading-tight">
                         {node.html}
                       </pre>
                     </div>
                   ))}
-                  {issue.nodes.length > 8 && <p className="text-[10px] text-slate-400 italic">Showing first 8 of {issue.nodes.length} occurrences...</p>}
+                  {issue.nodes.length > 5 && <p className="text-[8px] text-slate-400 italic">... and {issue.nodes.length - 5} more instances documented in detailed scan logs.</p>}
                 </div>
               </div>
             ))}
           </div>
         </div>
       ))}
+      
+      <div className="text-center pt-10 border-t border-slate-100 pdf-avoid-break">
+        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">End of Automated Accessibility Audit Report</p>
+      </div>
     </div>
   );
 
