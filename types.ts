@@ -43,5 +43,27 @@ export interface PageScanResult {
 
 export enum ScanMode {
   SINGLE = 'single',
-  MULTIPLE = 'multiple'
+  MULTIPLE = 'multiple',
+  BATCH = 'batch'
+}
+
+// New Batch Job Types
+export type JobStatus = 'idle' | 'running' | 'paused' | 'completed' | 'aborted';
+
+export interface BatchJobItem {
+  id: string;
+  url: string;
+  status: 'pending' | 'scanning' | 'completed' | 'failed';
+  error?: string;
+  result?: PageScanResult;
+}
+
+export interface BatchJob {
+  id: string;
+  name: string;
+  items: BatchJobItem[];
+  status: JobStatus;
+  progress: number;
+  startTime: number;
+  endTime?: number;
 }

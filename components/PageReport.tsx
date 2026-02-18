@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { PageScanResult, AccessibilityIssue, AccessibilityNode } from '../types';
 import { GeminiService } from '../services/geminiService';
+import { ExportService } from '../services/exportService';
 
 interface PageReportProps {
   page: PageScanResult;
@@ -19,20 +20,52 @@ const PageReport: React.FC<PageReportProps> = ({ page, initialIssue, autoStartAi
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
   
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const codeContainerRef = useRef<HTMLDivElement>(null);
-
-  const htmlLines = useMemo(() => (page.htmlSnapshot || "").split('\n'), [page.htmlSnapshot]);
-
-  const findLineNumber = (snippet: string) => {
-    if (!page.htmlSnapshot) return -1;
-    const index = page.htmlSnapshot.indexOf(snippet);
-    if (index === -1) return -1;
-    return page.htmlSnapshot.substring(0, index).split('\n').length;
-  };
+  const htmlViewRef = useRef<HTMLPreElement>(null);
+  const singlePdfTemplateRef = useRef<HTMLDivElement>(null);
 
   const activeNode = activeIssue?.nodes[selectedNodeIdx];
+
+  const highlightedHtmlView = useMemo(() => {
+    if (!page.htmlSnapshot || !activeNode?.html) return page.htmlSnapshot;
+    
+    // Normalize snippets slightly to handle minor string mismatches (whitespace/escaping)
+    const snippet = activeNode.html.trim();
+    const snapshot = page.htmlSnapshot;
+    
+    // Try exact match first
+    let index = snapshot.indexOf(snippet);
+    let matchedSnippet = snippet;
+
+    // Fallback: try matching a smaller portion if the full snippet fails due to attribute ordering differences
+    if (index === -1) {
+       // Just highlight the start of the tag if we can't find the whole thing
+       const tagStart = snippet.split('>')[0] + '>';
+       index = snapshot.indexOf(tagStart);
+       matchedSnippet = tagStart;
+    }
+
+    if (index === -1) return snapshot;
+
+    return (
+      <>
+        {snapshot.substring(0, index)}
+        <mark id="code-focus-highlight" className="bg-indigo-600 text-white px-2 py-1 rounded-md font-bold ring-4 ring-indigo-500/50 shadow-xl transition-all">
+          {snapshot.substring(index, index + matchedSnippet.length)}
+        </mark>
+        {snapshot.substring(index + matchedSnippet.length)}
+      </>
+    );
+  }, [page.htmlSnapshot, activeNode]);
+
+  const handleExportPDF = async () => {
+    if (!singlePdfTemplateRef.current) return;
+    setIsExportingPDF(true);
+    await ExportService.generatePDF(singlePdfTemplateRef.current, `Accessibility_Audit_${page.title}`);
+    setIsExportingPDF(false);
+  };
 
   const getAiRemediation = async (issue: AccessibilityIssue) => {
     setIsAiPanelOpen(true);
@@ -48,6 +81,27 @@ const PageReport: React.FC<PageReportProps> = ({ page, initialIssue, autoStartAi
     }
   };
 
+  const healthScore = useMemo(() => {
+    const crit = page.issues.filter(i => i.impact === 'critical').length;
+    const seri = page.issues.filter(i => i.impact === 'serious').length;
+    return Math.max(0, 100 - (crit * 20) - (seri * 10));
+  }, [page.issues]);
+
+  // Handle focus scrolling in HTML View
+  useEffect(() => {
+    if (activeTab === 'fullhtml') {
+      const timer = setTimeout(() => {
+        const highlight = document.getElementById('code-focus-highlight');
+        if (highlight) {
+          highlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Add a temporary glow effect
+          highlight.classList.add('ring-offset-4', 'ring-offset-slate-900');
+        }
+      }, 500); 
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, activeNode]);
+
   useEffect(() => {
     if (activeTab === 'live' && iframeRef.current && activeNode) {
       const target = activeNode.target[0];
@@ -57,32 +111,31 @@ const PageReport: React.FC<PageReportProps> = ({ page, initialIssue, autoStartAi
         const doc = iframe.contentDocument || iframe.contentWindow?.document;
         if (!doc) return;
         doc.querySelectorAll('.a11y-highlight-ring').forEach(el => el.remove());
-        const el = doc.querySelector(target) as HTMLElement;
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          const rect = el.getBoundingClientRect();
-          const ring = doc.createElement('div');
-          ring.className = 'a11y-highlight-ring';
-          Object.assign(ring.style, {
-            position: 'absolute',
-            top: `${rect.top + (iframe.contentWindow?.scrollY || 0) - 4}px`,
-            left: `${rect.left + (iframe.contentWindow?.scrollX || 0) - 4}px`,
-            width: `${rect.width + 8}px`,
-            height: `${rect.height + 8}px`,
-            border: '4px solid #4f46e5',
-            borderRadius: '8px',
-            boxShadow: '0 0 20px rgba(79, 70, 229, 0.4)',
-            zIndex: '999999',
-            pointerEvents: 'none',
-            animation: 'pulse-ring 2s infinite'
-          });
-          if (!doc.getElementById('a11y-styles')) {
-            const style = doc.createElement('style');
-            style.id = 'a11y-styles';
-            style.textContent = `@keyframes pulse-ring { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.05); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }`;
-            doc.head.appendChild(style);
+        
+        try {
+          const el = doc.querySelector(target) as HTMLElement;
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const rect = el.getBoundingClientRect();
+            const ring = doc.createElement('div');
+            ring.className = 'a11y-highlight-ring';
+            Object.assign(ring.style, {
+              position: 'absolute',
+              top: `${rect.top + (iframe.contentWindow?.scrollY || 0) - 4}px`,
+              left: `${rect.left + (iframe.contentWindow?.scrollX || 0) - 4}px`,
+              width: `${rect.width + 8}px`,
+              height: `${rect.height + 8}px`,
+              border: '5px solid #4f46e5',
+              borderRadius: '12px',
+              boxShadow: '0 0 30px rgba(79, 70, 229, 0.6)',
+              zIndex: '999999',
+              pointerEvents: 'none',
+              animation: 'pulse-ring 2s infinite ease-in-out'
+            });
+            doc.body.appendChild(ring);
           }
-          doc.body.appendChild(ring);
+        } catch (e) {
+          console.warn("Could not highlight element in live view:", target);
         }
       };
       if (iframe.contentDocument?.readyState === 'complete') injectHighlight();
@@ -90,62 +143,80 @@ const PageReport: React.FC<PageReportProps> = ({ page, initialIssue, autoStartAi
     }
   }, [activeTab, activeNode]);
 
-  useEffect(() => {
-    if (activeTab === 'fullhtml' && activeNode && codeContainerRef.current) {
-      const lineNum = findLineNumber(activeNode.html);
-      if (lineNum !== -1) {
-        const lineEl = codeContainerRef.current.querySelector(`[data-line="${lineNum}"]`);
-        lineEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }
-  }, [activeTab, activeNode]);
-
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-0 md:p-6 overflow-hidden !mt-0">
-      <div className="bg-white dark:bg-slate-900 w-full h-full max-w-[1600px] rounded-none md:rounded-[32px] shadow-2xl flex flex-col relative overflow-hidden transition-colors">
-        
-        {/* AI Side-panel */}
-        <div className={`absolute top-0 right-0 h-full w-full md:w-[480px] bg-white dark:bg-slate-900 shadow-2xl z-[150] transition-transform duration-500 transform ${isAiPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-           <div className="h-full flex flex-col">
-              <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center bg-indigo-600 text-white">
-                 <h3 className="font-black text-sm uppercase tracking-widest">AI Fix Remediation</h3>
-                 <button onClick={() => setIsAiPanelOpen(false)} className="hover:bg-white/20 p-2 rounded-lg transition-colors">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-                 </button>
+    <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-0 md:p-6 overflow-hidden transition-all duration-300">
+      
+      {/* 
+          PDF template moved far off-screen.
+          Used for html2pdf capture. 
+          The 'break-inside-avoid' class is key for proper paging.
+      */}
+      <div className="absolute top-0 left-[-10000px] pointer-events-none" aria-hidden="true">
+        <div 
+          ref={singlePdfTemplateRef} 
+          className="bg-white text-slate-900 p-8 md:p-16 space-y-12 w-[1000px] block" 
+        >
+          <div className="border-b-4 border-slate-900 pb-10 flex justify-between items-end break-inside-avoid">
+            <div className="space-y-2">
+              <h1 className="text-4xl font-black tracking-tight uppercase">Technical Accessibility Audit</h1>
+              <p className="text-xl font-bold text-indigo-600 leading-tight">{page.title}</p>
+              <p className="text-xs font-mono text-slate-400">{page.path}</p>
+            </div>
+            <div className="text-right">
+              <div className="text-6xl font-black">{healthScore}%</div>
+              <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Page Score</div>
+            </div>
+          </div>
+          <div className="space-y-12 block">
+            {page.issues.map((issue, idx) => (
+              <div key={idx} className="space-y-6 border-l-4 border-slate-100 pl-8 pb-8 block break-inside-avoid">
+                 <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="text-xl font-black">{idx + 1}. {issue.help}</h3>
+                      <p className="text-xs font-mono text-indigo-600 mt-1">Rule: {issue.id} | WCAG: {issue.wcag || 'N/A'}</p>
+                    </div>
+                    <span className="px-3 py-1 rounded text-[10px] font-black uppercase bg-slate-900 text-white">{issue.impact}</span>
+                 </div>
+                 <p className="text-sm text-slate-600 leading-relaxed italic">{issue.description}</p>
+                 <div className="space-y-4">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Detected Occurrences ({issue.nodes.length})</h4>
+                    {issue.nodes.slice(0, 5).map((node, nIdx) => (
+                      <div key={nIdx} className="space-y-2 break-inside-avoid">
+                        <div className="text-[9px] font-bold text-indigo-400 uppercase tracking-tight">INSTANCE {nIdx + 1}</div>
+                        <pre className="p-4 bg-slate-50 rounded-xl text-[10px] font-mono text-slate-800 overflow-hidden whitespace-pre-wrap border border-slate-200">
+                          {node.html}
+                        </pre>
+                      </div>
+                    ))}
+                    {issue.nodes.length > 5 && <p className="text-[10px] text-slate-400 italic">Showing first 5 results in PDF report...</p>}
+                 </div>
               </div>
-              <div className="flex-grow overflow-y-auto p-8 custom-scrollbar">
-                 {isAiLoading ? (
-                   <div className="flex flex-col items-center justify-center h-full gap-4">
-                      <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                      <p className="text-slate-400 font-bold text-xs">Analyzing and correcting snippet...</p>
-                   </div>
-                 ) : (
-                   <div className="prose prose-slate dark:prose-invert max-w-none text-sm leading-relaxed">
-                      {aiSuggestion}
-                   </div>
-                 )}
-              </div>
-              <div className="p-6 border-t dark:border-slate-800">
-                 <button onClick={() => setIsAiPanelOpen(false)} className="w-full py-4 bg-slate-900 dark:bg-slate-800 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl">Close Remediation</button>
-              </div>
-           </div>
+            ))}
+          </div>
         </div>
+      </div>
 
+      <div className="bg-white dark:bg-slate-900 w-full h-full max-w-[1600px] rounded-none md:rounded-[32px] shadow-2xl flex flex-col relative overflow-hidden transition-colors border dark:border-slate-800">
+        
         {/* Modal Header */}
         <div className="px-8 py-5 border-b dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 z-[105] shadow-sm">
           <div className="flex items-center gap-4">
-             <div className="w-10 h-10 bg-indigo-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+             <div className="w-10 h-10 bg-indigo-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-inner">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
              </div>
              <div>
-                <h2 className="text-lg font-black text-slate-900 dark:text-white leading-tight">{page.title}</h2>
+                <h2 className="text-lg font-black text-slate-900 dark:text-white leading-tight">Page Audit Detail</h2>
                 <div className="text-[10px] font-mono text-slate-400 truncate max-w-[400px]">{page.path}</div>
              </div>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={() => getAiRemediation(activeIssue!)} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[10px] tracking-widest flex items-center gap-2 shadow-lg shadow-indigo-200">
-               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-               AI REMEDIATION GUIDE
+            <button onClick={() => getAiRemediation(activeIssue!)} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[10px] tracking-widest flex items-center gap-2 shadow-lg hover:bg-black transition-all">
+               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+               AI REMEDIATE
+            </button>
+            <button onClick={handleExportPDF} disabled={isExportingPDF} className="px-5 py-2.5 bg-slate-900 text-white rounded-xl font-black text-[10px] tracking-widest flex items-center gap-2 shadow-lg disabled:opacity-50 hover:bg-slate-800 transition-all">
+               {isExportingPDF ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
+               PDF REPORT
             </button>
             <button onClick={onClose} className="p-2.5 text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -154,10 +225,10 @@ const PageReport: React.FC<PageReportProps> = ({ page, initialIssue, autoStartAi
         </div>
 
         <div className="flex-grow flex overflow-hidden">
-          {/* Sidebar - FIXED WIDTH */}
+          {/* Sidebar */}
           <div className="w-[380px] shrink-0 border-r dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex flex-col">
-            <div className="p-6 border-b dark:border-slate-800 bg-white dark:bg-slate-900">
-               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Detected Issues ({page.issues.length})</h3>
+            <div className="p-6 border-b dark:border-slate-800 bg-white dark:bg-slate-900 transition-colors">
+               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Found Issues ({page.issues.length})</h3>
             </div>
             <div className="flex-grow overflow-y-auto custom-scrollbar">
               {page.issues.map((issue, idx) => (
@@ -167,131 +238,116 @@ const PageReport: React.FC<PageReportProps> = ({ page, initialIssue, autoStartAi
                   className={`w-full text-left p-6 border-b dark:border-slate-800 transition-all relative ${activeIssue === issue ? 'bg-white dark:bg-slate-800 shadow-xl z-10 border-l-4 border-l-indigo-600' : 'hover:bg-slate-100 dark:hover:bg-slate-800/30'}`}
                 >
                   <div className="flex justify-between items-start mb-2">
-                     <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${issue.impact === 'critical' ? 'bg-rose-100 text-rose-600' : 'bg-orange-100 text-orange-600'}`}>
+                     <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${
+                       issue.impact === 'critical' ? 'bg-rose-100 text-rose-600' : 
+                       issue.impact === 'serious' ? 'bg-orange-100 text-orange-600' :
+                       issue.impact === 'moderate' ? 'bg-amber-100 text-amber-600' :
+                       'bg-slate-100 text-slate-500'
+                     }`}>
                         {issue.impact}
                      </span>
-                     <span className="text-[10px] font-black text-slate-300 dark:text-slate-700">#{(idx+1).toString().padStart(2, '0')}</span>
+                     <span className="text-[10px] font-black text-slate-300 dark:text-slate-700 tracking-tighter">#{idx+1}</span>
                   </div>
-                  <div className="text-xs font-black text-slate-900 dark:text-slate-100 leading-snug mb-3">{issue.help}</div>
-                  <div className="flex justify-between items-center">
-                     <span className="text-[10px] font-bold text-slate-400 uppercase">{issue.nodes.length} Instances</span>
-                     <span className="text-[9px] font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{issue.engine}</span>
-                  </div>
+                  <div className="text-xs font-black text-slate-900 dark:text-slate-100 leading-snug mb-1">{issue.help}</div>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{issue.nodes.length} Instances</div>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Report Viewer */}
-          <div className="flex-grow flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
-             {/* View Navigation */}
-             <div className="px-8 border-b dark:border-slate-800 flex items-center bg-white dark:bg-slate-900 z-10 transition-colors">
+          <div className="flex-grow flex flex-col bg-white dark:bg-slate-900 overflow-hidden transition-colors">
+             <div className="px-8 border-b dark:border-slate-800 flex items-center bg-white dark:bg-slate-900 z-10 shadow-sm transition-colors">
                 <nav className="flex gap-8">
-                   {[
-                     { id: 'snapshot', label: 'SNAPSHOT' },
-                     { id: 'fullhtml', label: 'SOURCE' },
-                     { id: 'live', label: 'LIVE' }
-                   ].map(tab => (
+                   {['snapshot', 'fullhtml', 'live'].map(tab => (
                      <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id as any)}
-                        className={`py-5 text-[10px] font-black tracking-[0.2em] transition-all border-b-2 ${activeTab === tab.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                        key={tab}
+                        onClick={() => setActiveTab(tab as any)}
+                        className={`py-5 text-[10px] font-black tracking-[0.2em] transition-all border-b-2 ${activeTab === tab ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                      >
-                        {tab.label}
+                        {tab.toUpperCase() === 'FULLHTML' ? 'HTML VIEW' : tab.toUpperCase() === 'LIVE' ? 'LIVE HIGHLIGHT' : tab.toUpperCase()}
                      </button>
                    ))}
                 </nav>
              </div>
 
-             {/* Dynamic Viewport */}
              <div className="flex-grow relative bg-slate-50 dark:bg-slate-900/50 overflow-hidden transition-colors">
-                {activeTab === 'snapshot' && (
-                  <div className="h-full p-10 overflow-y-auto custom-scrollbar">
-                     <div className="max-w-4xl mx-auto space-y-10">
-                        <div className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border dark:border-slate-800 shadow-sm">
-                           <h4 className="text-lg font-black text-slate-900 dark:text-white mb-6">Technical Diagnosis</h4>
-                           <div className="space-y-4">
-                              <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-2xl border dark:border-slate-700">
-                                 <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Description</h5>
-                                 <p className="text-slate-700 dark:text-slate-300 text-sm font-medium leading-relaxed">{activeIssue?.description}</p>
-                              </div>
-                              <div className="grid grid-cols-2 gap-4">
-                                 <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-2xl border dark:border-slate-700">
-                                    <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Impact</h5>
-                                    <div className="text-sm font-black text-slate-900 dark:text-white capitalize">{activeIssue?.impact}</div>
-                                 </div>
-                                 <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-2xl border dark:border-slate-700">
-                                    <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Standard</h5>
-                                    <div className="text-sm font-black text-slate-900 dark:text-white">{activeIssue?.wcag || 'Best Practice'}</div>
-                                 </div>
-                              </div>
-                           </div>
-                        </div>
-                        <div className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border dark:border-slate-800 shadow-sm">
-                           <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Code Snippet</h5>
-                           <div className="p-6 bg-slate-900 rounded-2xl font-mono text-xs text-emerald-400 overflow-x-auto shadow-inner">
-                              {activeNode?.html}
-                           </div>
-                        </div>
-                     </div>
-                  </div>
-                )}
+                <div className="h-full overflow-y-auto custom-scrollbar p-10">
+                  {activeTab === 'snapshot' && (
+                    <div className="max-w-4xl mx-auto space-y-10 bg-white dark:bg-slate-900 p-12 rounded-[40px] shadow-2xl border dark:border-slate-800 animate-in fade-in transition-colors">
+                       <div className="grid grid-cols-2 gap-8">
+                          <div className="space-y-4">
+                             <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rule Description</h4>
+                             <p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed italic">{activeIssue?.description}</p>
+                          </div>
+                          <div className="space-y-3">
+                             <div className="p-5 bg-slate-50 dark:bg-slate-800 rounded-2xl border dark:border-slate-700 flex justify-between items-center transition-colors shadow-inner">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Impact Level</span>
+                                <span className={`text-sm font-black uppercase ${
+                                  activeIssue?.impact === 'critical' ? 'text-rose-600' : 
+                                  activeIssue?.impact === 'serious' ? 'text-orange-600' : 'text-amber-600'
+                                }`}>{activeIssue?.impact}</span>
+                             </div>
+                             <div className="p-5 bg-slate-50 dark:bg-slate-800 rounded-2xl border dark:border-slate-700 flex justify-between items-center transition-colors shadow-inner">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">WCAG Standard</span>
+                                <span className="text-sm font-black text-indigo-600 dark:text-indigo-400">{activeIssue?.wcag || 'WCAG 2.1'}</span>
+                             </div>
+                          </div>
+                       </div>
+                       <div className="space-y-4 pt-6 border-t dark:border-slate-800">
+                          <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-between">
+                            Occurrence Implementation (Instance {selectedNodeIdx + 1})
+                            <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-lg text-[9px] font-black uppercase tracking-tight">FOCUSED SNIPPET</span>
+                          </h5>
+                          <pre className="p-8 bg-slate-900 rounded-[32px] font-mono text-xs text-emerald-400 overflow-x-auto shadow-2xl border border-slate-800 leading-relaxed ring-2 ring-indigo-500/50">
+                             {activeNode?.html}
+                          </pre>
+                       </div>
+                    </div>
+                  )}
 
-                {activeTab === 'fullhtml' && (
-                  <div className="h-full flex flex-col bg-white">
-                     <div ref={codeContainerRef} className="flex-grow overflow-y-auto custom-scrollbar font-mono text-[13px] leading-6 selection:bg-indigo-100">
-                        {htmlLines.map((line, i) => {
-                          const lineNum = i + 1;
-                          const isErrorLine = activeNode && line.includes(activeNode.html.substring(0, 30));
-                          return (
-                            <div key={i} data-line={lineNum} className={`flex group ${isErrorLine ? 'bg-indigo-50 border-l-4 border-indigo-600' : 'hover:bg-slate-50'}`}>
-                               <div className="w-16 flex-shrink-0 text-right pr-6 text-slate-300 select-none bg-slate-50 group-hover:text-slate-400">{lineNum}</div>
-                               <div className={`px-4 whitespace-pre ${isErrorLine ? 'text-indigo-900 font-bold' : 'text-slate-600'}`}>{line}</div>
-                            </div>
-                          );
-                        })}
-                     </div>
-                  </div>
-                )}
+                  {activeTab === 'fullhtml' && (
+                    <div className="h-full bg-slate-900 rounded-[32px] p-8 overflow-y-auto custom-scrollbar border border-slate-800 shadow-2xl animate-in zoom-in-95 relative transition-all">
+                       <pre ref={htmlViewRef} className="text-[11px] font-mono text-slate-400 leading-relaxed whitespace-pre-wrap selection:bg-indigo-600 selection:text-white">
+                          {highlightedHtmlView}
+                       </pre>
+                       <div className="sticky top-0 right-0 float-right px-3 py-1 bg-indigo-600 text-white rounded-lg text-[8px] font-black uppercase tracking-widest shadow-lg">SOURCE HIGHLIGHT</div>
+                    </div>
+                  )}
 
-                {activeTab === 'live' && (
-                  <div className="h-full">
-                     <iframe ref={iframeRef} srcDoc={page.htmlSnapshot} className="w-full h-full bg-white border-none" title="Live Preview" sandbox="allow-same-origin allow-scripts" />
-                  </div>
-                )}
+                  {activeTab === 'live' && (
+                    <div className="h-full bg-white rounded-[32px] overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl relative animate-in fade-in transition-all">
+                       <iframe
+                         ref={iframeRef}
+                         className="w-full h-full"
+                         srcDoc={`<!DOCTYPE html><html><head><style>
+                           @keyframes pulse-ring { 0% { opacity: 0.4; transform: scale(0.9); } 50% { opacity: 0.8; transform: scale(1); } 100% { opacity: 0.4; transform: scale(0.9); } }
+                           .a11y-highlight-ring { animation: pulse-ring 2s infinite ease-in-out; position: absolute; border: 5px solid #4f46e5; border-radius: 12px; box-shadow: 0 0 30px rgba(79, 70, 229, 0.6); z-index: 999999; pointer-events: none; }
+                         </style></head><body>${page.htmlSnapshot}</body></html>`}
+                       />
+                       <div className="absolute top-4 right-4 px-3 py-1 bg-indigo-600 text-white rounded-lg text-[8px] font-black uppercase tracking-widest shadow-lg">LIVE DOM HIGHLIGHT</div>
+                    </div>
+                  )}
+                </div>
              </div>
 
-             {/* Navigation Footer */}
              <div className="px-8 py-5 border-t dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between items-center shadow-inner z-10 transition-colors">
-                <div className="flex items-center gap-6">
-                   <div className="space-y-0.5">
-                      <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Selected Instance</div>
-                      <div className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
-                         <span className="w-6 h-6 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px]">{selectedNodeIdx + 1}</span>
-                         of {activeIssue?.nodes.length} occurrences
-                      </div>
-                   </div>
-                   <div className="h-10 w-px bg-slate-100 dark:bg-slate-800"></div>
-                   <div className="flex gap-2">
-                      <button onClick={() => setActiveTab('fullhtml')} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl text-[10px] font-black hover:bg-slate-900 hover:text-white transition-all">VIEW CODE</button>
-                      <button onClick={() => setActiveTab('live')} className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl text-[10px] font-black hover:bg-indigo-600 hover:text-white transition-all">VIEW PAGE</button>
-                   </div>
+                <div className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-3">
+                   Instance {selectedNodeIdx + 1} <span className="text-slate-300 dark:text-slate-700">/</span> {activeIssue?.nodes.length}
                 </div>
-
                 <div className="flex gap-3">
                    <button 
                       disabled={selectedNodeIdx === 0}
                       onClick={() => setSelectedNodeIdx(prev => prev - 1)}
-                      className="px-6 py-2.5 bg-white dark:bg-slate-800 border dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-[10px] font-black hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                      className="px-6 py-2.5 bg-white dark:bg-slate-800 border dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-[10px] font-black hover:bg-slate-50 dark:hover:bg-slate-700 transition-all disabled:opacity-30 active:scale-95 shadow-sm"
                    >
-                      PREVIOUS
+                      PREV
                    </button>
                    <button 
                       disabled={selectedNodeIdx === (activeIssue?.nodes.length || 0) - 1}
                       onClick={() => setSelectedNodeIdx(prev => prev + 1)}
-                      className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black hover:bg-black transition-all shadow-md active:scale-95"
+                      className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black hover:bg-black transition-all active:scale-95 shadow-md"
                    >
-                      NEXT OCCURRENCE
+                      NEXT
                    </button>
                 </div>
              </div>

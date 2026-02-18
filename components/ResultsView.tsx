@@ -1,11 +1,10 @@
-
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect , useRef} from 'react';
 import { PageScanResult, AccessibilityIssue, Impact, ConformanceLevel, ScanMode } from '../types';
 import PageReport from './PageReport';
 import { GeminiService, FixResult } from '../services/geminiService';
 import FixReviewModal from './FixReviewModal';
 import { ScannerService } from '../services/scannerService';
-
+import { ExportService } from '../services/exportService';
 interface ResultsViewProps {
   scans: PageScanResult[];
 }
@@ -19,7 +18,10 @@ const ResultsView: React.FC<ResultsViewProps> = ({ scans }) => {
   
   const [isFixing, setIsFixing] = useState(false);
   const [fixResult, setFixResult] = useState<(FixResult & { afterScan?: PageScanResult }) | null>(null);
-
+  const [isExporting, setIsExporting] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const batchReportRef = useRef<HTMLDivElement>(null);
+  const singleReportRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     setActiveScanIdx(0);
   }, [scans]);
@@ -76,6 +78,22 @@ const ResultsView: React.FC<ResultsViewProps> = ({ scans }) => {
     return Math.max(0, 100 - (crit * 20) - (seri * 10));
   };
 
+  const handleExportBatchPDF = async () => {
+    if (!batchReportRef.current) return;
+    setIsExporting(true);
+    setShowExportMenu(false);
+    await ExportService.generatePDF(batchReportRef.current, `Batch_Audit_${Date.now()}`);
+    setIsExporting(false);
+  };
+
+  const handleExportSinglePDF = async () => {
+    if (!singleReportRef.current) return;
+    setIsExporting(true);
+    setShowExportMenu(false);
+    await ExportService.generatePDF(singleReportRef.current, `Audit_${activeScan.title}`);
+    setIsExporting(false);
+  };
+
   const getCategoryStyles = (category?: string) => {
     switch (category) {
       case 'Design': return 'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400';
@@ -93,8 +111,68 @@ const ResultsView: React.FC<ResultsViewProps> = ({ scans }) => {
     </div>
   );
 
+  const PDFReportContent = ({ results }: { results: PageScanResult[] }) => (
+    <div className="bg-white text-slate-900 p-8 md:p-16 space-y-16 w-[1000px] block">
+      <div className="text-center border-b-8 border-slate-900 pb-12 break-inside-avoid">
+        <h1 className="text-5xl font-black uppercase tracking-tighter mb-4">Accessibility Master Audit</h1>
+        <p className="text-xl text-slate-500 font-bold uppercase tracking-[0.4em]">A11y ConformEase Report</p>
+        <div className="mt-4 text-[10px] font-mono text-slate-400">{new Date().toLocaleString()}</div>
+      </div>
+      {results.map((scan, sIdx) => (
+        <div key={scan.scanId} className="space-y-12 block border-t-2 border-slate-100 pt-12 first:border-none first:pt-0">
+          <div className="flex justify-between items-end pb-6 break-inside-avoid">
+            <div>
+              <h2 className="text-3xl font-black">{sIdx + 1}. {scan.title}</h2>
+              <p className="text-sm font-mono text-indigo-600 mt-1">{scan.path}</p>
+            </div>
+            <div className="text-right">
+              <div className="text-5xl font-black">{calculateHealth(scan.issues)}%</div>
+              <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Page Score</div>
+            </div>
+          </div>
+          <div className="space-y-8 block">
+            {scan.issues.map((issue, iIdx) => (
+              <div key={issue.id + iIdx} className="space-y-6 border-l-4 border-slate-200 pl-8 pb-8 block break-inside-avoid">
+                <div className="flex justify-between items-start">
+                  <h3 className="text-xl font-black text-slate-900">{sIdx + 1}.{iIdx + 1}. {issue.help}</h3>
+                  <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${issue.impact === 'critical' ? 'bg-rose-600 text-white' : 'bg-slate-900 text-white'}`}>{issue.impact}</span>
+                </div>
+                <p className="text-sm text-slate-600 leading-relaxed italic">{issue.description}</p>
+                <div className="space-y-4">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Occurrences ({issue.nodes.length})</h4>
+                  {issue.nodes.slice(0, 8).map((node, nIdx) => (
+                    <div key={nIdx} className="space-y-2 break-inside-avoid">
+                      <div className="text-[9px] font-bold text-indigo-400">ELEMENT {nIdx + 1}</div>
+                      <pre className="p-4 bg-slate-50 rounded-xl text-[10px] font-mono text-slate-800 overflow-hidden whitespace-pre-wrap border border-slate-200">
+                        {node.html}
+                      </pre>
+                    </div>
+                  ))}
+                  {issue.nodes.length > 8 && <p className="text-[10px] text-slate-400 italic">Showing first 8 of {issue.nodes.length} occurrences...</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* 
+          Templates are moved far off-screen via absolute positioning. 
+          The ExportService will isolate these for high-quality capture.
+      */}
+      <div className="absolute top-0 left-[-10000px] pointer-events-none" aria-hidden="true">
+        <div ref={batchReportRef}>
+          <PDFReportContent results={scans} />
+        </div>
+        <div ref={singleReportRef}>
+          <PDFReportContent results={activeScan ? [activeScan] : []} />
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-indigo-600 p-8 rounded-[40px] text-white shadow-2xl shadow-indigo-500/20 transition-all">
@@ -102,15 +180,16 @@ const ResultsView: React.FC<ResultsViewProps> = ({ scans }) => {
             <div className="text-4xl font-black tracking-tight mb-8">{scans.length} Pages</div>
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-white/10 p-4 rounded-2xl">
-                 <div className="text-2xl font-black">{batchStats.totalIssues}</div>
+                 <div className="text-2xl font-black">{scans.reduce((a, s) => a + s.issues.length, 0)}</div>
                  <div className="text-[9px] font-black uppercase tracking-widest opacity-60">Violations</div>
               </div>
               <div className="bg-rose-500/40 p-4 rounded-2xl">
-                 <div className="text-2xl font-black">{batchStats.critical}</div>
+                 <div className="text-2xl font-black">{scans.reduce((a, s) => a + s.issues.filter(i => i.impact === 'critical').length, 0)}</div>
                  <div className="text-[9px] font-black uppercase tracking-widest opacity-60">Critical</div>
               </div>
             </div>
           </div>
+
           <div className="bg-white dark:bg-slate-900 rounded-[32px] border dark:border-slate-800 p-6 shadow-sm flex flex-col max-h-[400px]">
              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-2">Select Page</h3>
              <div className="space-y-2 overflow-y-auto custom-scrollbar flex-grow pr-2">
@@ -128,17 +207,14 @@ const ResultsView: React.FC<ResultsViewProps> = ({ scans }) => {
         </div>
 
         <div className="lg:col-span-8 space-y-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 bg-white dark:bg-slate-900 p-10 rounded-[40px] border dark:border-slate-800 shadow-sm transition-colors">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 bg-white dark:bg-slate-900 p-10 rounded-[40px] border dark:border-slate-800 shadow-sm  transition-colors">
             <div className="space-y-1 w-[600px]">
-              <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{activeScan?.title}</h2>
+              <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight leading-tight">{activeScan?.title}</h2>
               <p className="text-slate-400 dark:text-slate-500 text-xs font-mono truncate max-w-md">{activeScan?.path}</p>
             </div>
+            
             <div className="flex items-center gap-4 w-full md:w-auto">
-              <button 
-                onClick={handleFullFix}
-                disabled={isFixing}
-                className="flex-1 md:flex-none px-6 py-3.5 bg-emerald-600 text-white rounded-2xl font-black text-[10px] tracking-widest shadow-xl shadow-emerald-200 dark:shadow-none hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-              >
+               <button onClick={handleFullFix} disabled={isFixing}  className="flex-1 md:flex-none px-6 py-3.5 bg-emerald-600 text-white rounded-2xl font-black text-[10px] tracking-widest shadow-xl shadow-emerald-200 dark:shadow-none hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-50">
                 {isFixing ? (
                   <div className="flex items-center gap-2">
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -151,6 +227,32 @@ const ResultsView: React.FC<ResultsViewProps> = ({ scans }) => {
                   </>
                 )}
               </button>
+              
+                <button 
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  className="px-6 py-3.5 bg-slate-900 text-white rounded-2xl font-black text-[10px] tracking-widest uppercase hover:bg-black transition-all flex items-center gap-2"
+                >
+                  {isExporting ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>}
+                  Export Results
+                  <svg className={`w-3 h-3 transition-transform ${showExportMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                
+                {showExportMenu && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border dark:border-slate-700 overflow-hidden z-[100] animate-in fade-in zoom-in-95 duration-200">
+                    <div className="p-3 border-b dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                       <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Single Page</div>
+                    </div>
+                    <button onClick={() => { setShowExportMenu(false); ExportService.exportIssuesToCSV(activeScan.issues, activeScan.title); }} className="w-full text-left px-5 py-3 text-[10px] font-black text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 uppercase tracking-widest transition-colors">Export CSV (Page)</button>
+                    <button onClick={handleExportSinglePDF} className="w-full text-left px-5 py-3 text-[10px] font-black text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 uppercase tracking-widest transition-colors">Export PDF (Page)</button>
+                    <div className="p-3 border-b dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                       <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Full Batch</div>
+                    </div>
+                    <button onClick={() => { setShowExportMenu(false); ExportService.exportBatchToCSV(scans, "Batch_Report"); }} className="w-full text-left px-5 py-3 text-[10px] font-black text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 uppercase tracking-widest transition-colors">Export CSV (Batch)</button>
+                    <button onClick={handleExportBatchPDF} className="w-full text-left px-5 py-3 text-[10px] font-black text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 uppercase tracking-widest transition-colors">Export PDF (Batch)</button>
+                  </div>
+                )}
+              
+              
               <div className="bg-slate-50 dark:bg-slate-800 px-6 py-3 rounded-2xl text-center border dark:border-slate-700 transition-colors">
                 <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400 leading-none">{activeScan?.issues.length}</div>
                 <div className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">Issues</div>
@@ -159,12 +261,13 @@ const ResultsView: React.FC<ResultsViewProps> = ({ scans }) => {
           </div>
 
           <div className="bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row gap-4 transition-colors">
-            <input type="text" placeholder="Filter issues..." value={search} onChange={e => setSearch(e.target.value)} className="flex-grow px-5 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 dark:text-white outline-none" />
+            <input type="text" placeholder="Filter issues..." aria-label="filter-inputSearch" value={search} onChange={e => setSearch(e.target.value)} className="flex-grow px-5 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 dark:text-white outline-none" />
             <div className="flex gap-2">
-              <select value={filterImpact} onChange={e => setFilterImpact(e.target.value as any)} className="px-4 py-3 bg-slate-50 dark:bg-slate-800 rounded-2xl text-xs font-black text-slate-600 dark:text-slate-400 outline-none border-none transition-colors">
+              <select value={filterImpact} onChange={e => setFilterImpact(e.target.value as any)} aria-label="filter-issueType" className="px-4 py-3 bg-slate-50 dark:bg-slate-800 rounded-2xl text-xs font-black text-slate-600 dark:text-slate-400 outline-none border-none transition-colors">
                 <option value="all">Impact: All</option>
                 <option value="critical">Critical</option>
                 <option value="serious">Serious</option>
+                <option value="moderate">Moderate</option>
               </select>
             </div>
           </div>
@@ -180,8 +283,8 @@ const ResultsView: React.FC<ResultsViewProps> = ({ scans }) => {
                     <td className="px-8 py-5"><div className="font-black text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 transition-colors">{issue.help}</div><div className="text-[10px] text-slate-400 font-mono tracking-tighter mt-1">{issue.id}</div></td>
                     <td className="px-8 py-5 text-center"><span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-tight ${getCategoryStyles(issue.category)}`}>{issue.category || 'Development'}</span></td>
                     <td className="px-8 py-5 text-center"><span className="font-black text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-xl text-xs">{issue.nodes.length}</span></td>
-                    <td className="px-8 py-5 text-center"><span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${issue.conformance === 'A' ? 'text-rose-600' : 'text-indigo-600'}`}>{issue.conformance || 'BP'}</span></td>
-                    <td className="px-8 py-5 text-right"><button onClick={() => setSelectedIssue(issue)} className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[9px] tracking-widest hover:bg-black transition-all shadow-md">VIEW</button></td>
+                    <td className="px-8 py-5 text-center"><span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${issue.conformance === 'A' ? 'text-rose-600' : 'text-indigo-600'}`}>{issue.conformance || 'S'}</span></td>
+                    <td className="px-8 py-5 text-right"><button onClick={() => setSelectedIssue(issue)} className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[9px] tracking-widest hover:bg-black transition-all shadow-md">View Report</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -191,8 +294,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ scans }) => {
       </div>
 
       {activeScan && selectedIssue && <PageReport page={activeScan} initialIssue={selectedIssue} onClose={() => setSelectedIssue(null)} />}
-      
-      {activeScan && fixResult && (
+         {activeScan && fixResult && (
         <FixReviewModal 
           result={fixResult} 
           filename={activeScan.title} 
