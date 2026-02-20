@@ -209,7 +209,7 @@ const PDFReportContent = ({ results }: { results: PageScanResult[] }) => (
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         <div className="lg:col-span-3 space-y-4">
-             <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 p-8 rounded-[40px] text-white shadow-2xl relative overflow-hidden group">
+             <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 p-8 rounded-[40px] text-white shadow-2xl relative  group">
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-125 transition-transform">
                <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
             </div>
@@ -219,16 +219,20 @@ const PDFReportContent = ({ results }: { results: PageScanResult[] }) => (
               <div className="bg-white/10 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap">Issues: {scans.reduce((a, s) => a + s.issues.length, 0)}</div>
               <div className="bg-rose-500/40 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap border border-rose-400/20">Critical: {scans.reduce((a, s) => a + s.issues.filter(i => i.impact === 'critical').length, 0)}</div>
               <div className="bg-slate-50 dark:bg-slate-800 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap text-center border dark:border-slate-700 cursor-help relative" >
-                <div className={`text-2xl font-black ${calculateHealth(activeScan?.issues || []) > 80 ? 'text-emerald-500' : 'text-rose-500'}`}>Score: {calculateHealth(activeScan?.issues || [])}%</div>
-                <button type="button" aria-label="Show scoring breakdown" onClick={() => setShowScoreInfo(!showScoreInfo)}  className="top-2 right-2 text-slate-400 hover:text-indigo-600 transition-colors relative">
+                <div className={`text-xs font-black ${calculateHealth(activeScan?.issues || []) > 80 ? 'text-emerald-500' : 'text-rose-500'}`}>Score: {calculateHealth(activeScan?.issues || [])}%</div>
+                <button type="button" aria-label="Show scoring breakdown" onClick={() => setShowScoreInfo(!showScoreInfo)}  className="top-2 right-2 text-slate-400 hover:text-indigo-600 transition-colors absolute">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z" />
                   </svg>
-                   {showScoreInfo && (
-                      <div className="absolute top-full right-8 mt-4 w-80 p-8 bg-slate-900 text-white rounded-[40px] shadow-2xl z-[150] animate-in fade-in slide-in-from-top-4 border border-white/10 ring-8 ring-slate-900/10 backdrop-blur-sm">
+                </button>
+              </div>
+            </div>
+          </div>
+            {showScoreInfo && (
+                      <div className="absolute top-full -right-10 mt-4 w-80 p-8 bg-slate-900 text-white rounded-[40px] shadow-2xl z-[150] animate-in fade-in slide-in-from-top-4 border border-white/10 ring-8 ring-slate-900/10 backdrop-blur-sm">
                         <div className="flex justify-between items-start mb-6">
                             <h4 className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Compliance Algorithm</h4>
-                            <button onClick={() => setShowScoreInfo(false)} className="text-white/40 hover:text-white transition-colors ">
+                            <button aria-label="close Score Info" onClick={() => setShowScoreInfo(false)} className="text-white/40 hover:text-white transition-colors ">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </div>
@@ -256,12 +260,6 @@ const PDFReportContent = ({ results }: { results: PageScanResult[] }) => (
                         </div>
                       </div>
                     )}
-          
-                </button>
-                
-              </div>
-            </div>
-          </div>
           <div className="bg-white dark:bg-slate-900 rounded-[32px] border dark:border-slate-800 p-6 shadow-sm flex flex-col max-h-[400px]">
              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-2">Select Page</h3>
              <div className="space-y-2 overflow-y-auto custom-scrollbar flex-grow pr-2">
