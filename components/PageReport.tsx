@@ -224,14 +224,10 @@ const PageReport: React.FC<PageReportProps> = ({ page, initialIssue, autoStartAi
           </div>
         </div>
 
-        <div className="flex-grow flex overflow-hidden">
+        <div className="flex-grow flex overflow-hidden" >
                {/* AI Remediation Panel (Slide-over) */}
-          <div className={`absolute inset-0 z-50 transition-all duration-500 ${isAiPanelOpen ? 'visible' : 'invisible'}`}>
-             <div role="button" tabindex="0" aria-label="btn-openAipanel"
-              onClick={() => setIsAiPanelOpen(false)}
-              className={`absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity duration-500 ${isAiPanelOpen ? 'opacity-100' : 'opacity-0'}`}
-             ></div>
-             <div className={`absolute top-0 right-0 h-full w-full max-w-xl bg-white dark:bg-slate-900 shadow-2xl border-l dark:border-slate-800 flex flex-col transition-transform duration-500 transform ${isAiPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+
+             <div className={`absolute z-50 top-0 right-0 h-full w-full max-w-xl bg-white dark:bg-slate-900 shadow-2xl border-l dark:border-slate-800 flex flex-col transition-transform duration-500 transform ${isAiPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                 <div className="p-8 border-b dark:border-slate-800 flex justify-between items-center bg-indigo-600 text-white">
                    <div className="flex items-center gap-3">
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
@@ -281,9 +277,9 @@ const PageReport: React.FC<PageReportProps> = ({ page, initialIssue, autoStartAi
                         )}
                      </div>
                    )}
-                </div>
-             </div>
-          </div>
+                  </div>   
+            </div>
+
           {/* Sidebar */}
           <div className="w-[380px] shrink-0 border-r dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex flex-col">
             <div className="p-6 border-b dark:border-slate-800 bg-white dark:bg-slate-900 transition-colors">
