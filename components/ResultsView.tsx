@@ -209,38 +209,59 @@ const PDFReportContent = ({ results }: { results: PageScanResult[] }) => (
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         <div className="lg:col-span-3 space-y-4">
-          <div className="bg-indigo-600 p-8 rounded-[40px] text-white shadow-2xl shadow-indigo-500/20 transition-all">
-            <h2 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">Batch Summary</h2>
-            <div className="text-4xl font-black tracking-tight mb-8">{scans.length} Pages</div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-white/10 p-4 rounded-2xl">
-                 <div className="text-2xl font-black">{scans.reduce((a, s) => a + s.issues.length, 0)}</div>
-                 <div className="text-[9px] font-black uppercase tracking-widest opacity-60">Violations</div>
-              </div>
-              <div className="bg-rose-500/40 p-4 rounded-2xl">
-                 <div className="text-2xl font-black">{scans.reduce((a, s) => a + s.issues.filter(i => i.impact === 'critical').length, 0)}</div>
-                 <div className="text-[9px] font-black uppercase tracking-widest opacity-60">Critical</div>
-              </div>
-              <div className="bg-slate-50 dark:bg-slate-800 px-5 py-2 rounded-2xl text-center border dark:border-slate-700 cursor-help" >
-                <div className={`text-2xl font-black ${calculateHealth(activeScan?.issues || []) > 80 ? 'text-emerald-500' : 'text-rose-500'}`}>{calculateHealth(activeScan?.issues || [])}%</div>
-                <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Score</div>
-                <button type="button" aria-label="Show scoring breakdown" onClick={() => setShowScoreInfo(!showScoreInfo)}  className="absolute top-2 right-2 text-slate-400 hover:text-indigo-600 transition-colors">
+             <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 p-8 rounded-[40px] text-white shadow-2xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-125 transition-transform">
+               <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
+            </div>
+            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">Batch Intelligence</h2>
+            <div className="text-4xl font-black mt-2 tracking-tight">{scans.length} Pages Audited</div>
+            <div className="mt-8 flex gap-3">
+              <div className="bg-white/10 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap">Issues: {scans.reduce((a, s) => a + s.issues.length, 0)}</div>
+              <div className="bg-rose-500/40 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap border border-rose-400/20">Critical: {scans.reduce((a, s) => a + s.issues.filter(i => i.impact === 'critical').length, 0)}</div>
+              <div className="bg-slate-50 dark:bg-slate-800 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap text-center border dark:border-slate-700 cursor-help relative" >
+                <div className={`text-2xl font-black ${calculateHealth(activeScan?.issues || []) > 80 ? 'text-emerald-500' : 'text-rose-500'}`}>Score: {calculateHealth(activeScan?.issues || [])}%</div>
+                <button type="button" aria-label="Show scoring breakdown" onClick={() => setShowScoreInfo(!showScoreInfo)}  className="top-2 right-2 text-slate-400 hover:text-indigo-600 transition-colors relative">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z" />
                   </svg>
+                   {showScoreInfo && (
+                      <div className="absolute top-full right-8 mt-4 w-80 p-8 bg-slate-900 text-white rounded-[40px] shadow-2xl z-[150] animate-in fade-in slide-in-from-top-4 border border-white/10 ring-8 ring-slate-900/10 backdrop-blur-sm">
+                        <div className="flex justify-between items-start mb-6">
+                            <h4 className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Compliance Algorithm</h4>
+                            <button onClick={() => setShowScoreInfo(false)} className="text-white/40 hover:text-white transition-colors ">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                        <p className="text-[10px] leading-relaxed text-slate-300 mb-6 font-medium">Scoring is based on the <b>Weighted Violation Factor</b>. Unique rule failures deduct significantly from the score to highlight systemic gaps.</p>
+                        <div className="space-y-3 font-black text-[9px] uppercase tracking-widest">
+                            <div className="flex justify-between p-2 rounded-lg bg-white/5 border border-white/5">
+                              <span className="text-rose-400">Critical Failure</span>
+                              <span>-20 PTS</span>
+                            </div>
+                            <div className="flex justify-between p-2 rounded-lg bg-white/5 border border-white/5">
+                              <span className="text-orange-400">Serious Failure</span>
+                              <span>-10 PTS</span>
+                            </div>
+                            <div className="flex justify-between p-2 rounded-lg bg-white/5 border border-white/5">
+                              <span className="text-amber-400">Moderate Failure</span>
+                              <span>-5 PTS</span>
+                            </div>
+                            <div className="flex justify-between p-2 rounded-lg bg-white/5 border border-white/5">
+                              <span className="text-slate-400">Repeat Instances</span>
+                              <span>-0.5 PTS</span>
+                            </div>
+                        </div>
+                        <div className="mt-8 pt-6 border-t border-white/10 text-center">
+                            <button onClick={() => setShowScoreInfo(false)} className="w-full py-3 bg-indigo-600 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-white hover:text-indigo-600 transition-all">Got it</button>
+                        </div>
+                      </div>
+                    )}
+          
                 </button>
+                
               </div>
-            </div>  
-            {showScoreInfo && (
-              <div className="absolute top-24 right-8 w-72 p-6 bg-slate-900 text-white rounded-[32px] shadow-2xl z-[150] animate-in fade-in slide-in-from-top-4 border border-white/10">
-                 <h4 className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-2">Scoring Breakdown</h4>
-                 <p className="text-[10px] opacity-70 mb-4">Weights: Critical (-20), Serious (-10), Moderate (-5). Repetitive instances deduct minor points (-0.5).</p>
-                 <button onClick={() => setShowScoreInfo(false)} className="w-full py-2 bg-indigo-600 rounded-xl text-[9px] font-black uppercase">Dismiss</button>
-              </div>
-            )}
-           
+            </div>
           </div>
-
           <div className="bg-white dark:bg-slate-900 rounded-[32px] border dark:border-slate-800 p-6 shadow-sm flex flex-col max-h-[400px]">
              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-2">Select Page</h3>
              <div className="space-y-2 overflow-y-auto custom-scrollbar flex-grow pr-2">
@@ -350,10 +371,10 @@ const PDFReportContent = ({ results }: { results: PageScanResult[] }) => (
               </tbody>
                <tfoot className="bg-slate-50 dark:bg-slate-800/20 border-t dark:border-slate-800">
                 <tr className="text-[10px] font-black uppercase text-slate-400">
-                  <td colSpan={2} className="px-8 py-5">Aggregate Summary</td>
+                  <td colSpan={3} className="px-8 py-5">Aggregate Summary</td>
                   <td className="text-center px-6 py-5">
                     <div className="text-slate-900 dark:text-white text-sm font-black">{totalOccurrences}</div>
-                    <div className="text-[8px] font-bold">Total Items</div>
+                    <div className="text-[8px] font-bold">Total Occurences</div>
                   </td>
                   <td colSpan={2}></td>
                 </tr>
