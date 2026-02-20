@@ -12,14 +12,16 @@ interface ResultsViewProps {
 const ResultsView: React.FC<ResultsViewProps> = ({ scans }) => {
   const [activeScanIdx, setActiveScanIdx] = useState(0);
   const [selectedIssue, setSelectedIssue] = useState<AccessibilityIssue | null>(null);
+  const [isRemediating, setIsRemediating] = useState(false);
   const [search, setSearch] = useState('');
   const [filterImpact, setFilterImpact] = useState<Impact | 'all'>('all');
   const [filterConformance, setFilterConformance] = useState<ConformanceLevel | 'all'>('all');
-  
-  const [isFixing, setIsFixing] = useState(false);
-  const [fixResult, setFixResult] = useState<(FixResult & { afterScan?: PageScanResult }) | null>(null);
+  //const [isFixing, setIsFixing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [fixResult, setFixResult] = useState<{ result: FixResult; originalCount: number; newCount: number } | null>(null);
+  const [showScoreInfo, setShowScoreInfo] = useState(false);
+
   const batchReportRef = useRef<HTMLDivElement>(null);
   const singleReportRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -38,7 +40,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ scans }) => {
     });
   }, [activeScan, search, filterImpact, filterConformance]);
 
-  const batchStats = useMemo(() => {
+ /* const batchStats = useMemo(() => {
     const totalIssues = scans.reduce((acc, s) => acc + s.issues.length, 0);
     const critical = scans.reduce((acc, s) => acc + s.issues.filter(i => i.impact === 'critical').length, 0);
     return { totalIssues, critical };
@@ -71,13 +73,39 @@ const ResultsView: React.FC<ResultsViewProps> = ({ scans }) => {
       setIsFixing(false);
     }
   };
-
-  const calculateHealth = (issues: AccessibilityIssue[]) => {
-    const crit = issues.filter(i => i.impact === 'critical').length;
-    const seri = issues.filter(i => i.impact === 'serious').length;
-    return Math.max(0, 100 - (crit * 20) - (seri * 10));
+*/
+ const calculateHealth = (issues: AccessibilityIssue[]) => {
+    if (!issues || issues.length === 0) return 100;
+    const weights = { critical: 20, serious: 10, moderate: 5, info: 1 };
+    let score = 100;
+    const seenRules = new Set<string>();
+    issues.forEach(i => {
+      if (!seenRules.has(i.id)) {
+        score -= (weights[i.impact as keyof typeof weights] || 5);
+        seenRules.add(i.id);
+      } else {
+        score -= 0.5;
+      }
+    });
+    return Math.max(0, Math.round(score));
   };
+   const totalOccurrences = useMemo(() => {
+    return (activeScan?.issues || []).reduce((sum, issue) => sum + issue.nodes.length, 0);
+  }, [activeScan]);
 
+   const handleRemediatePage = async () => {
+    if (!activeScan || !activeScan.htmlSnapshot) return;
+    setIsRemediating(true);
+    try {
+      const result = await GeminiService.fixHtml(activeScan.htmlSnapshot, activeScan.issues);
+      const verification = await ScannerService.scanRawHtml(result.fixedHtml, "Verification", activeScan.path, "verify", ScanMode.SINGLE);
+      setFixResult({ result, originalCount: activeScan.issues.length, newCount: verification.issues.length });
+    } catch (err) {
+      alert("Remediation error: " + (err as Error).message);
+    } finally {
+      setIsRemediating(false);
+    }
+  };
   const handleExportBatchPDF = async () => {
     if (!batchReportRef.current) return;
     setIsExporting(true);
@@ -128,7 +156,8 @@ const PDFReportContent = ({ results }: { results: PageScanResult[] }) => (
             </div>
             <div className="text-right">
               <div className="text-4xl font-black">{calculateHealth(scan.issues)}%</div>
-              <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Score</div>
+              <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Score </div>
+              
             </div>
           </div>
           <div className="space-y-6 block">
@@ -183,7 +212,7 @@ const PDFReportContent = ({ results }: { results: PageScanResult[] }) => (
           <div className="bg-indigo-600 p-8 rounded-[40px] text-white shadow-2xl shadow-indigo-500/20 transition-all">
             <h2 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">Batch Summary</h2>
             <div className="text-4xl font-black tracking-tight mb-8">{scans.length} Pages</div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="bg-white/10 p-4 rounded-2xl">
                  <div className="text-2xl font-black">{scans.reduce((a, s) => a + s.issues.length, 0)}</div>
                  <div className="text-[9px] font-black uppercase tracking-widest opacity-60">Violations</div>
@@ -192,7 +221,24 @@ const PDFReportContent = ({ results }: { results: PageScanResult[] }) => (
                  <div className="text-2xl font-black">{scans.reduce((a, s) => a + s.issues.filter(i => i.impact === 'critical').length, 0)}</div>
                  <div className="text-[9px] font-black uppercase tracking-widest opacity-60">Critical</div>
               </div>
-            </div>
+              <div className="bg-slate-50 dark:bg-slate-800 px-5 py-2 rounded-2xl text-center border dark:border-slate-700 cursor-help" >
+                <div className={`text-2xl font-black ${calculateHealth(activeScan?.issues || []) > 80 ? 'text-emerald-500' : 'text-rose-500'}`}>{calculateHealth(activeScan?.issues || [])}%</div>
+                <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Score</div>
+                <button type="button" aria-label="Show scoring breakdown" onClick={() => setShowScoreInfo(!showScoreInfo)}  className="absolute top-2 right-2 text-slate-400 hover:text-indigo-600 transition-colors">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z" />
+                  </svg>
+                </button>
+              </div>
+            </div>  
+            {showScoreInfo && (
+              <div className="absolute top-24 right-8 w-72 p-6 bg-slate-900 text-white rounded-[32px] shadow-2xl z-[150] animate-in fade-in slide-in-from-top-4 border border-white/10">
+                 <h4 className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-2">Scoring Breakdown</h4>
+                 <p className="text-[10px] opacity-70 mb-4">Weights: Critical (-20), Serious (-10), Moderate (-5). Repetitive instances deduct minor points (-0.5).</p>
+                 <button onClick={() => setShowScoreInfo(false)} className="w-full py-2 bg-indigo-600 rounded-xl text-[9px] font-black uppercase">Dismiss</button>
+              </div>
+            )}
+           
           </div>
 
           <div className="bg-white dark:bg-slate-900 rounded-[32px] border dark:border-slate-800 p-6 shadow-sm flex flex-col max-h-[400px]">
@@ -219,7 +265,7 @@ const PDFReportContent = ({ results }: { results: PageScanResult[] }) => (
             </div>
             
             <div className="flex items-center gap-4 w-full md:w-auto">
-               <button onClick={handleFullFix} disabled={isFixing}  className="flex-1 md:flex-none px-6 py-3.5 bg-emerald-600 text-white rounded-2xl font-black text-[10px] tracking-widest shadow-xl shadow-emerald-200 dark:shadow-none hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+              {/* <button onClick={handleFullFix} disabled={isFixing}  className="flex-1 md:flex-none px-6 py-3.5 bg-emerald-600 text-white rounded-2xl font-black text-[10px] tracking-widest shadow-xl shadow-emerald-200 dark:shadow-none hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-50">
                 {isFixing ? (
                   <div className="flex items-center gap-2">
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -231,6 +277,9 @@ const PDFReportContent = ({ results }: { results: PageScanResult[] }) => (
                     <span>AI REMEDIATE & VALIDATE</span>
                   </>
                 )}
+              </button>*/}
+               <button aria-label="ai-remediation-btn" onClick={handleRemediatePage} disabled={isRemediating} className="px-6 py-3 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-black transition-all flex items-center gap-2 shadow-lg shadow-indigo-100 dark:shadow-none">
+                {isRemediating ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : "AI REMEDIATE PAGE"}
               </button>
               <div className="relative">
                 <button 
@@ -280,12 +329,18 @@ const PDFReportContent = ({ results }: { results: PageScanResult[] }) => (
           <div className="bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden overflow-x-auto transition-all">
             <table className="w-full text-left">
               <thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 border-b dark:border-slate-800">
-                <tr><th className="px-8 py-5">Audit Rule</th><th className="px-8 py-5 text-center">Category</th><th className="px-8 py-5 text-center">Occurrences</th><th className="px-8 py-5 text-center">Standard</th><th className="px-8 py-5 text-right">Action</th></tr>
+                <tr><th className="px-8 py-5">Audit Rule</th>
+                <th className="px-6 py-5 text-center">Status</th>
+                <th className="px-8 py-5 text-center">Category</th>
+                <th className="px-8 py-5 text-center">Occurrences</th>
+                <th className="px-8 py-5 text-center">Standard</th>
+                <th className="px-8 py-5 text-right">Action</th></tr>
               </thead>
               <tbody className="divide-y dark:divide-slate-800 text-sm">
                 {filteredIssues.map((issue, idx) => (
                   <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
                     <td className="px-8 py-5"><div className="font-black text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 transition-colors">{issue.help}</div><div className="text-[10px] text-slate-400 font-mono tracking-tighter mt-1">{issue.id}</div></td>
+                    <td className="px-6 py-5 text-center"><span className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${issue.status === 'Confirmed' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>{issue.status || 'Confirmed'}</span></td>
                     <td className="px-8 py-5 text-center"><span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-tight ${getCategoryStyles(issue.category)}`}>{issue.category || 'Development'}</span></td>
                     <td className="px-8 py-5 text-center"><span className="font-black text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-xl text-xs">{issue.nodes.length}</span></td>
                     <td className="px-8 py-5 text-center"><span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${issue.conformance === 'A' ? 'text-rose-600' : 'text-indigo-600'}`}>{issue.conformance || 'S'}</span></td>
@@ -293,21 +348,23 @@ const PDFReportContent = ({ results }: { results: PageScanResult[] }) => (
                   </tr>
                 ))}
               </tbody>
+               <tfoot className="bg-slate-50 dark:bg-slate-800/20 border-t dark:border-slate-800">
+                <tr className="text-[10px] font-black uppercase text-slate-400">
+                  <td colSpan={2} className="px-8 py-5">Aggregate Summary</td>
+                  <td className="text-center px-6 py-5">
+                    <div className="text-slate-900 dark:text-white text-sm font-black">{totalOccurrences}</div>
+                    <div className="text-[8px] font-bold">Total Items</div>
+                  </td>
+                  <td colSpan={2}></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
       </div>
 
       {activeScan && selectedIssue && <PageReport page={activeScan} initialIssue={selectedIssue} onClose={() => setSelectedIssue(null)} />}
-         {activeScan && fixResult && (
-        <FixReviewModal 
-          result={fixResult} 
-          filename={activeScan.title} 
-          originalIssueCount={activeScan.issues.length}
-          remediatedIssueCount={fixResult.afterScan?.issues.length || 0}
-          onClose={() => setFixResult(null)} 
-        />
-      )}
+      {fixResult && <FixReviewModal result={fixResult.result} filename={activeScan?.title || "audit"} originalIssueCount={fixResult.originalCount} remediatedIssueCount={fixResult.newCount} onClose={() => setFixResult(null)} />}
     </div>
   );
 };

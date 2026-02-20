@@ -375,7 +375,7 @@ export class ScannerService {
               issueType: 'Axe Core Violation',
               category: v.tags.includes('cat.color') ? 'Design' : v.tags.includes('cat.aria') ? 'Development' : 'Content',
               conformance: level,
-              status: status,
+              status: (axeResults.violations.includes(v) ? 'Confirmed' : 'Potential') as IssueStatus,
               nodes: v.nodes.map((n: any) => ({
                 html: n.html,
                 target: n.target,

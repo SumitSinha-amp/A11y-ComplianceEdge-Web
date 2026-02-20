@@ -15,13 +15,13 @@ type ViewTab = 'snapshot' | 'fullhtml' | 'live';
 
 const PageReport: React.FC<PageReportProps> = ({ page, initialIssue, autoStartAi = false, onClose }) => {
   const [activeIssue, setActiveIssue] = useState<AccessibilityIssue | null>(initialIssue || page.issues[0] || null);
+  const [selectedIssue, setSelectedIssue] = useState<AccessibilityIssue | null>(null);
   const [activeTab, setActiveTab] = useState<ViewTab>('snapshot');
   const [selectedNodeIdx, setSelectedNodeIdx] = useState(0);
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
-  
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const htmlViewRef = useRef<HTMLPreElement>(null);
   const singlePdfTemplateRef = useRef<HTMLDivElement>(null);
@@ -209,21 +209,81 @@ const PageReport: React.FC<PageReportProps> = ({ page, initialIssue, autoStartAi
              </div>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={() => getAiRemediation(activeIssue!)} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[10px] tracking-widest flex items-center gap-2 shadow-lg hover:bg-black transition-all">
+            <button onClick={() => getAiRemediation(activeIssue!)} 
+              disabled={isAiLoading} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[10px] tracking-widest flex items-center gap-2 shadow-lg hover:bg-black transition-all">
                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-               AI REMEDIATE
+               AI REMEDIATION GUIDE
             </button>
             <button onClick={handleExportPDF} disabled={isExportingPDF} className="px-5 py-2.5 bg-slate-900 text-white rounded-xl font-black text-[10px] tracking-widest flex items-center gap-2 shadow-lg disabled:opacity-50 hover:bg-slate-800 transition-all">
                {isExportingPDF ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
                PDF REPORT
             </button>
-            <button onClick={onClose} className="p-2.5 text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all">
+            <button aria-label="btn-close-pagereport" onClick={onClose} className="p-2.5 text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
         </div>
 
         <div className="flex-grow flex overflow-hidden">
+               {/* AI Remediation Panel (Slide-over) */}
+          <div className={`absolute inset-0 z-50 transition-all duration-500 ${isAiPanelOpen ? 'visible' : 'invisible'}`}>
+             <div role="button" tabindex="0" aria-label="btn-openAipanel"
+              onClick={() => setIsAiPanelOpen(false)}
+              className={`absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity duration-500 ${isAiPanelOpen ? 'opacity-100' : 'opacity-0'}`}
+             ></div>
+             <div className={`absolute top-0 right-0 h-full w-full max-w-xl bg-white dark:bg-slate-900 shadow-2xl border-l dark:border-slate-800 flex flex-col transition-transform duration-500 transform ${isAiPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                <div className="p-8 border-b dark:border-slate-800 flex justify-between items-center bg-indigo-600 text-white">
+                   <div className="flex items-center gap-3">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                      <h3 className="text-xl font-black uppercase tracking-tight">AI Remediation Guide</h3>
+                   </div>
+                   <button aria-label="btn-close-aipanel" onClick={() => setIsAiPanelOpen(false)} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                   </button>
+                </div>
+
+                <div className="flex-grow overflow-y-auto p-8 custom-scrollbar space-y-8">
+                   {isAiLoading ? (
+                     <div className="flex flex-col items-center justify-center h-full space-y-6 animate-in fade-in">
+                        <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                        <div className="text-center space-y-2">
+                           <p className="text-indigo-600 dark:text-indigo-400 font-black uppercase tracking-widest text-sm">Consulting Intelligence...</p>
+                           <p className="text-slate-400 text-xs font-medium">Gemini is generating a tailored fix for: <br/><span className="italic">"{activeIssue?.help}"</span></p>
+                        </div>
+                     </div>
+                   ) : (
+                     <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-6">
+                        <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl border dark:border-slate-800">
+                           <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Violation context</h4>
+                           <div className="text-sm font-bold text-slate-900 dark:text-white leading-relaxed">{activeIssue?.help}</div>
+                           <p className="text-xs text-slate-500 mt-2">{activeIssue?.description}</p>
+                        </div>
+
+                        <div className="prose prose-slate dark:prose-invert max-w-none">
+                           <div className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+                              {aiSuggestion}
+                           </div>
+                        </div>
+
+                        {aiSuggestion && (
+                           <button 
+                            onClick={() => {
+                              // Simple heuristic to find code blocks if any
+                              const codeMatch = aiSuggestion.match(/```(?:html)?\s*([\s\S]*?)```/);
+                              const toCopy = codeMatch ? codeMatch[1].trim() : aiSuggestion;
+                              navigator.clipboard.writeText(toCopy);
+                              alert("Copied recommendation to clipboard!");
+                            }}
+                            className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-xl"
+                           >
+                              Copy Recommendation
+                           </button>
+                        )}
+                     </div>
+                   )}
+                </div>
+             </div>
+          </div>
           {/* Sidebar */}
           <div className="w-[380px] shrink-0 border-r dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex flex-col">
             <div className="p-6 border-b dark:border-slate-800 bg-white dark:bg-slate-900 transition-colors">
@@ -258,7 +318,7 @@ const PageReport: React.FC<PageReportProps> = ({ page, initialIssue, autoStartAi
              <div className="px-8 border-b dark:border-slate-800 flex items-center bg-white dark:bg-slate-900 z-10 shadow-sm transition-colors">
                 <nav className="flex gap-8">
                    {['snapshot', 'fullhtml', 'live'].map(tab => (
-                     <button
+                     <button aria-label='btn-htmlview'
                         key={tab}
                         onClick={() => setActiveTab(tab as any)}
                         className={`py-5 text-[10px] font-black tracking-[0.2em] transition-all border-b-2 ${activeTab === tab ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
@@ -322,7 +382,7 @@ const PageReport: React.FC<PageReportProps> = ({ page, initialIssue, autoStartAi
                            @keyframes pulse-ring { 0% { opacity: 0.4; transform: scale(0.9); } 50% { opacity: 0.8; transform: scale(1); } 100% { opacity: 0.4; transform: scale(0.9); } }
                            .a11y-highlight-ring { animation: pulse-ring 2s infinite ease-in-out; position: absolute; border: 5px solid #4f46e5; border-radius: 12px; box-shadow: 0 0 30px rgba(79, 70, 229, 0.6); z-index: 999999; pointer-events: none; }
                          </style></head><body>${page.htmlSnapshot}</body></html>`}
-                       />
+                       title="htmlview-frame" />
                        <div className="absolute top-4 right-4 px-3 py-1 bg-indigo-600 text-white rounded-lg text-[8px] font-black uppercase tracking-widest shadow-lg">LIVE DOM HIGHLIGHT</div>
                     </div>
                   )}
