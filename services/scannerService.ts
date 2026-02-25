@@ -306,7 +306,7 @@ class SIAEngine {
       if (!(element instanceof HTMLElement)) return;
 
       // Visibility filter (ADD THIS)
-      if (!this.isActuallyVisible(element, win)) return;
+      if (!this.isVisible(element, win)) return;
 
       // Must contain real text
       if (!element.textContent?.trim()) return;
