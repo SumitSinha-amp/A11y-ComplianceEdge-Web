@@ -1962,7 +1962,6 @@ export class ScannerService {
         if (iframe.parentNode) document.body.removeChild(iframe);
         reject(new Error("Accessibility Audit Timed Out."));
       }, 60000);
-
       iframe.onload = async () => {
         try {
           if (abortSignal?.aborted) return;
@@ -2092,9 +2091,9 @@ export class ScannerService {
       };
 
       const axeScriptUrl =
-        "https://cdn.jsdelivr.net/npm/axe-core@4.11.1/axe.min.js"; 
-        iframe.srcdoc = html;
-       /*let processedHtml = html.includes("<html")
+        "https://cdn.jsdelivr.net/npm/axe-core@4.11.1/axe.min.js";
+        
+      let processedHtml = html.includes("<html")
         ? html
         : `<!DOCTYPE html><html lang="en"><head><title>${title}</title></head><body>${html}</body></html>`;
       if (baseUrl) {
@@ -2103,14 +2102,33 @@ export class ScannerService {
           `<head><base href="${baseUrl}">`,
         );
       }
-      
-     iframe.srcdoc = `
+     /* iframe.srcdoc = `
         <!DOCTYPE html>
         <html>
           <head><script src="${axeScriptUrl}"></script></head>
           <body>${processedHtml}</body>
         </html>
       `;*/
+      let finalHtml = processedHtml;
+
+      // Inject axe into existing <head>
+      if (finalHtml.includes("<head")) {
+        finalHtml = finalHtml.replace(
+          "<head>",
+          `<head><script src="${axeScriptUrl}"></script>`
+        );
+      } else {
+        // fallback if no head exists
+        finalHtml = `
+          <!DOCTYPE html>
+          <html>
+            <head><script src="${axeScriptUrl}"></script></head>
+            <body>${processedHtml}</body>
+          </html>
+        `;
+      }
+
+      iframe.srcdoc = finalHtml;
     });
   }
 
