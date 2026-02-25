@@ -144,7 +144,7 @@ const PageReport: React.FC<PageReportProps> = ({ page, initialIssue, autoStartAi
   }, [activeTab, activeNode]);
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-0 md:p-6 overflow-hidden transition-all duration-300">
+    <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-0 md:p-6 overflow-hidden transition-all duration-300 !mt-0">
           {/* 
           PDF template moved far off-screen.
           Used for html2pdf capture. 

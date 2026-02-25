@@ -435,63 +435,69 @@ export class ScannerService {
     });
   }
 
- static async scanPage(path: string, batchId: string, mode: ScanMode, onProgress?: (msg: string) => void, abortSignal?: AbortSignal): Promise<PageScanResult> {
-    onProgress?.(`Fetching content for: ${path}`);
-    const html = await this.fetchPageHtml(path, abortSignal);
-    let baseUrl = undefined;
-    if (path.startsWith('http')) {
-        try {
-            const urlObj = new URL(path);
-            baseUrl = urlObj.origin + urlObj.pathname.substring(0, urlObj.pathname.lastIndexOf('/') + 1);
-        } catch (e) {}
-    }
-    return this.scanRawHtml(html, "AEM Page Audit", path, batchId, mode, onProgress, baseUrl, abortSignal);
+static async scanPage(
+  path: string,
+  batchId: string,
+  mode: ScanMode,
+  onProgress?: (msg: string) => void,
+  abortSignal?: AbortSignal
+): Promise<PageScanResult> {
+
+  onProgress?.(`Fetching content for: ${path}`);
+
+  let targetUrl = path.trim();
+  if (!targetUrl.startsWith("http")) {
+    targetUrl = `https://${targetUrl}`;
   }
 
-    static async fetchPageHtml(path: string, abortSignal?: AbortSignal): Promise<string> {
-    let targetUrl = path.trim();
-    if (!targetUrl.startsWith('http')) {
-      targetUrl = `https://${targetUrl}`;
+  try {
+    const response = await fetch(
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+      { signal: abortSignal }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Proxy error: ${response.status} ${response.statusText}`);
     }
 
-    // Proxy list for better resilience against CORS blocks
-    const proxies = [
-      (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-      (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
-    ];
+    const html = await response.text();
 
-    let lastError = "";
+    if (!html || html.trim().length < 50) {
+      throw new Error("Received empty or blocked HTML content.");
+    }
 
-    // Attempt direct fetch first (if same-origin or CORS allowed)
+    let baseUrl: string | undefined;
     try {
-      const response = await fetch(targetUrl, { signal: abortSignal });
-      if (response.ok) {
-        const text = await response.text();
-        if (text && text.trim().length > 50) return text;
-      }
-    } catch (e) {
-      lastError = (e as Error).message;
-      if (abortSignal?.aborted) throw e;
+      const urlObj = new URL(targetUrl);
+      baseUrl =
+        urlObj.origin +
+        urlObj.pathname.substring(
+          0,
+          urlObj.pathname.lastIndexOf("/") + 1
+        );
+    } catch {}
+
+    return this.scanRawHtml(
+      html,
+      "AEM Page Audit",
+      targetUrl,
+      batchId,
+      mode,
+      onProgress,
+      baseUrl,
+      abortSignal
+    );
+
+  } catch (error) {
+    if (abortSignal?.aborted) {
+      throw new Error("Fetch aborted.");
     }
 
-    // Try proxies sequentially
-    for (const proxyFn of proxies) {
-      if (abortSignal?.aborted) throw new Error("Fetch aborted.");
-      try {
-        const proxiedUrl = proxyFn(targetUrl);
-        const response = await fetch(proxiedUrl, { signal: abortSignal });
-        if (response.ok) {
-          const text = await response.text();
-          if (text && text.trim().length > 50) return text;
-        } else {
-           lastError = `Proxy error: ${response.status} ${response.statusText}`;
-        }
-      } catch (e) {
-        lastError = (e as Error).message;
-        if (abortSignal?.aborted) throw e;
-      }
-    }
-
-    throw new Error(`Accessibility engine could not connect to: ${targetUrl}. Technical reason: ${lastError || "CORS policy or network block"}`);
+    throw new Error(
+      `Accessibility engine could not connect to: ${targetUrl}. Technical reason: ${
+        (error as Error).message
+      }`
+    );
   }
+}
 }
