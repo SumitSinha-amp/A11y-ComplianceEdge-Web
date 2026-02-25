@@ -1,7 +1,7 @@
 
 export type Impact = 'critical' | 'serious' | 'moderate' | 'minor' | 'info';
 
-export type IssueCategory = 'Development' | 'Design' | 'Content';
+export type IssueCategory = 'Development' | 'Design' | 'Content' | 'General';
 export type IssueStatus = 'Confirmed' | 'Potential';
 export type ConformanceLevel = 'A' | 'AA' | 'AAA' | 'S';
 

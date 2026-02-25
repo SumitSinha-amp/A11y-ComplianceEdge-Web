@@ -5,6 +5,7 @@ import {
   ScanMode,
   ConformanceLevel,
   IssueStatus,
+  IssueCategory 
 } from "../types";
 
 declare const axe: any;
@@ -1838,7 +1839,38 @@ class SIAEngine {
 
     return rules;
   }
+private resolveCategory(ruleId: string): IssueCategory {
+  const contentRules = [
+    "SIA-R11", // link name
+    "SIA-R12",
+    "SIA-R57",
+    "SIA-R72",
+    "SIA-R78"
+  ];
 
+  const designRules = [
+    "SIA-R60", // contrast
+    "SIA-R61",
+    "SIA-R111", // target size
+    "SIA-R113",
+    "SIA-R73", // line height
+    "SIA-R74"
+  ];
+
+  const developmentRules = [
+    "SIA-R18",
+    "SIA-R19",
+    "SIA-R20",
+    "SIA-R21",
+    "SIA-R99"
+  ];
+
+  if (contentRules.includes(ruleId)) return "Content";
+  if (designRules.includes(ruleId)) return "Design";
+  if (developmentRules.includes(ruleId)) return "Development";
+
+  return "General";
+}
   async runAllChecks(
     doc: Document,
     win: Window,
@@ -2060,8 +2092,9 @@ export class ScannerService {
       };
 
       const axeScriptUrl =
-        "https://cdn.jsdelivr.net/npm/axe-core@4.11.1/axe.min.js";
-      let processedHtml = html.includes("<html")
+        "https://cdn.jsdelivr.net/npm/axe-core@4.11.1/axe.min.js"; 
+        iframe.srcdoc = html;
+       /*let processedHtml = html.includes("<html")
         ? html
         : `<!DOCTYPE html><html lang="en"><head><title>${title}</title></head><body>${html}</body></html>`;
       if (baseUrl) {
@@ -2070,13 +2103,14 @@ export class ScannerService {
           `<head><base href="${baseUrl}">`,
         );
       }
-      iframe.srcdoc = `
+      
+     iframe.srcdoc = `
         <!DOCTYPE html>
         <html>
           <head><script src="${axeScriptUrl}"></script></head>
           <body>${processedHtml}</body>
         </html>
-      `;
+      `;*/
     });
   }
 
